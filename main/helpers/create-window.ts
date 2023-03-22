@@ -1,11 +1,11 @@
-import {
-  screen,
-  BrowserWindow,
-  BrowserWindowConstructorOptions,
-} from 'electron';
+import { screen, BrowserWindow, BrowserWindowConstructorOptions } from 'electron';
+import path from 'path';
 import Store from 'electron-store';
 
-export default (windowName: string, options: BrowserWindowConstructorOptions): BrowserWindow => {
+const createWindow = (
+  windowName: string,
+  options: BrowserWindowConstructorOptions
+): BrowserWindow => {
   const key = 'window-state';
   const name = `window-state-${windowName}`;
   const store = new Store({ name });
@@ -51,8 +51,6 @@ export default (windowName: string, options: BrowserWindowConstructorOptions): B
       return windowWithinBounds(windowState, display.bounds);
     });
     if (!visible) {
-      // Window is partially or fully not visible now.
-      // Reset it to safe defaults.
       return resetToDefaults();
     }
     return windowState;
@@ -71,14 +69,19 @@ export default (windowName: string, options: BrowserWindowConstructorOptions): B
     ...state,
     ...options,
     webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.resolve(__dirname, '../app/preload.js'),
       ...options.webPreferences,
     },
   };
+
   win = new BrowserWindow(browserOptions);
+
 
   win.on('close', saveState);
 
   return win;
 };
+
+export default createWindow;

@@ -1,4 +1,4 @@
-module.exports = {
+const config = {
   webpack: (config, { isServer }) => {
     if (!isServer) {
       config.target = 'electron-renderer';
@@ -7,3 +7,4 @@ module.exports = {
     return config;
   },
 };
+module.exports = config

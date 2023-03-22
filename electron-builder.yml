@@ -1,6 +1,6 @@
-appId: com.example.nextron
-productName: My Nextron App
-copyright: Copyright © 2018 Yoshihide Shiono
+appId: com.andrevangelista.lyricslideshow
+productName: Slides Lyrics
+copyright: Copyright © 2022 André Evangelista
 directories:
   output: dist
   buildResources: resources
@@ -9,4 +9,10 @@ files:
     filter:
       - package.json
       - app
+extraResources:
+  - from: resources
+    to: resources
 publish: null
+win:
+  target: nsis
+  icon: resources/icon.ico
