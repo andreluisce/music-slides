@@ -3,13 +3,13 @@ module.exports = {
   env: {
     browser: true,
     es2021: true,
-    'jest/globals': true,
   },
   extends: [
     'eslint:recommended',
     'plugin:react/recommended',
     'plugin:json/recommended',
     'prettier',
+    "next"
   ],
   parserOptions: {
     ecmaVersion: 'latest',
@@ -20,5 +20,8 @@ module.exports = {
     'no-debugger': 'warn',
     'no-console': 'warn',
     'react/no-unknown-property': ['error', { ignore: ['css', 'sx'] }],
+    "react/no-unescaped-entities": "off",
+    "@next/next/no-page-custom-font": "off",
+    "@next/next/no-html-link-for-pages": ["error", "renderer/pages/"]
   },
 };

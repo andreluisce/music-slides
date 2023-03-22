@@ -1,11 +1,21 @@
-import {
-  screen,
-  BrowserWindow,
-  BrowserWindowConstructorOptions,
-} from 'electron';
+import { screen, BrowserWindow, BrowserWindowConstructorOptions } from 'electron';
 import Store from 'electron-store';
 
-export default (windowName: string, options: BrowserWindowConstructorOptions): BrowserWindow => {
+function UpsertKeyValue(obj, keyToChange, value) {
+  const keyToChangeLower = keyToChange.toLowerCase();
+  for (const key of Object.keys(obj)) {
+    if (key.toLowerCase() === keyToChangeLower) {
+      obj[key] = value;
+      return;
+    }
+  }
+  obj[keyToChange] = value;
+}
+
+const createWindow = (
+  windowName: string,
+  options: BrowserWindowConstructorOptions
+): BrowserWindow => {
   const key = 'window-state';
   const name = `window-state-${windowName}`;
   const store = new Store({ name });
@@ -51,8 +61,6 @@ export default (windowName: string, options: BrowserWindowConstructorOptions): B
       return windowWithinBounds(windowState, display.bounds);
     });
     if (!visible) {
-      // Window is partially or fully not visible now.
-      // Reset it to safe defaults.
       return resetToDefaults();
     }
     return windowState;
@@ -76,9 +84,27 @@ export default (windowName: string, options: BrowserWindowConstructorOptions): B
       ...options.webPreferences,
     },
   };
+
   win = new BrowserWindow(browserOptions);
+
+  win.webContents.session.webRequest.onBeforeSendHeaders((details, callback) => {
+    const { requestHeaders } = details;
+    UpsertKeyValue(requestHeaders, 'Access-Control-Allow-Origin', ['*']);
+    callback({ requestHeaders });
+  });
+
+  win.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+    const { responseHeaders } = details;
+    UpsertKeyValue(responseHeaders, 'Access-Control-Allow-Origin', ['*']);
+    UpsertKeyValue(responseHeaders, 'Access-Control-Allow-Headers', ['*']);
+    callback({
+      responseHeaders,
+    });
+  });
 
   win.on('close', saveState);
 
   return win;
 };
+
+export default createWindow;

@@ -5,23 +5,14 @@ import { css, Global } from '@emotion/react';
 class MyDocument extends Document {
   render() {
     return (
-      <Html lang="en">
+      <Html lang='en'>
         <Head>
-          <meta charSet="utf-8" />
+          <meta charSet='utf-8' />
         </Head>
         <Global
           styles={css`
-            html, body {
-              margin: 0;
-              padding: 0;
-              min-height: 100%;
-            }
-
             body {
-              padding: 2rem 4rem;
-              background: papayawhip;
-              font-family: Helvetica, Arial, sans-serif;
-              font-size: 24px;
+              font-size: 2.4rem;
             }
           `}
         />
