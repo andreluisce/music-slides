@@ -1,5 +1,5 @@
 module.exports = {
-  transpilePackages: ['@/components', '@/lib'],
+  transpilePackages: ['components', 'lib'],
   webpack: (config, { isServer }) => {
     if (!isServer) {
       config.target = 'electron-renderer';
