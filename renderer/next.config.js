@@ -1,6 +1,5 @@
-const withTM = require('next-transpile-modules')(['@/components', '@/lib']);
-
-module.exports = withTM({
+module.exports = {
+  transpilePackages: ['@/components', '@/lib'],
   webpack: (config, { isServer }) => {
     if (!isServer) {
       config.target = 'electron-renderer';
@@ -8,4 +7,4 @@ module.exports = withTM({
 
     return config;
   },
-});
+};
