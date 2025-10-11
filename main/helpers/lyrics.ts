@@ -27,6 +27,10 @@ export const smartLyricsSearch = async (userQuery: string) => {
     });
 
     console.log('Gemini interpretation raw:', interpretation);
+    if (!interpretation) {
+      console.error('Gemini interpretation is null or empty. Cannot parse JSON.');
+      return [];
+    }
     const { title, artist, alternatives } = JSON.parse(interpretation) as SongInfo;
     console.log('Parsed song info - Title:', title, 'Artist:', artist, 'Alternatives:', alternatives);
 
