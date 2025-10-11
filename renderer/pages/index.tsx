@@ -1,8 +1,3 @@
-/** @jsxRuntime classic */
-/** @jsx jsx */
-
-import { jsx, Spinner } from 'theme-ui';
-
 import React, { Fragment, useEffect, useState } from 'react';
 import Head from 'next/head';
 import { SearchType } from '../shared/types';
@@ -16,6 +11,10 @@ function kebabToCapitalizeText(str) {
     .map(word => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ');
 }
+
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 function SearchForm({ isSearching, setFoundRemoteSongs, setIsSearching }) {
   const [artist, setArtist] = useState('');
@@ -37,39 +36,25 @@ function SearchForm({ isSearching, setFoundRemoteSongs, setIsSearching }) {
   };
 
   return (
-    <form
-      onSubmit={submitForm}
-      sx={{
-        display: 'grid',
-        gridTemplateColumns: '1fr 1fr .5fr',
-        gridGap: '10px',
-        alignItems: 'end',
-      }}
-    >
-      <div sx={{ display: 'flex', flexDirection: 'column' }}>
-        <label htmlFor='search' sx={{ variant: 'components.label' }}>
-          Artist
-        </label>
-        <input
+    <form onSubmit={submitForm} className='grid grid-cols-1 gap-4 md:grid-cols-3'>
+      <div className='flex flex-col'>
+        <Label htmlFor='artist'>Artist</Label>
+        <Input
           name='artist'
           id='artist'
           value={artist}
-          sx={{ variant: 'components.input' }}
           onChange={event => {
             const text = event.target.value;
             setArtist(text);
           }}
         />
       </div>
-      <div sx={{ display: 'flex', flexDirection: 'column' }}>
-        <label htmlFor='search' sx={{ variant: 'components.label' }}>
-          Song Title
-        </label>
-        <input
+      <div className='flex flex-col'>
+        <Label htmlFor='title'>Song Title</Label>
+        <Input
           name='title'
           id='title'
           value={title}
-          sx={{ variant: 'components.input' }}
           onChange={event => {
             const text = event.target.value;
             setTitle(text);
@@ -77,22 +62,22 @@ function SearchForm({ isSearching, setFoundRemoteSongs, setIsSearching }) {
         />
       </div>
 
-      <button
-        disabled={(!artist && !title) || isSearching}
-        sx={{
-          variant: 'components.button.success',
-          cursor: 'pointer',
-          ':disabled': {
-            backgroundColor: '#d3d3d3',
-            color: '#e9e9e9',
-          },
-        }}
-      >
+      <Button disabled={(!artist && !title) || isSearching} type='submit'>
         Search
-      </button>
+      </Button>
     </form>
   );
 }
+
+import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 function SongListTable({ filteredLocalSongs, foundRemoteSongs, isSearching }) {
   const [allSongs, setAllSongs] = useState([]);
@@ -119,112 +104,45 @@ function SongListTable({ filteredLocalSongs, foundRemoteSongs, isSearching }) {
   };
 
   return (
-    <div sx={{ display: 'grid', gridTemplateColumns: '1fr' }}>
+    <div className='grid grid-cols-1'>
       {filteredLocalSongs.length || foundRemoteSongs.length ? (
         <Fragment>
-          <table
-            sx={{
-              mt: 4,
-              '>tr': {
-                display: 'grid',
-                gridTemplateColumns: '.5fr 1fr',
-                p: 2,
-                fontSize: 2,
-              },
-            }}
-          >
-            <thead>
-              <tr
-                sx={{
-                  th: {
-                    backgroundColor: 'header',
-                    borderTopLeftRadius: 1,
-                    borderTopRightRadius: 1,
-                    color: 'white',
-                  },
-                }}
-              >
-                <th
-                  onClick={() => sortTableData('band')}
-                  sx={{
-                    cursor: 'pointer',
-                  }}
-                >
+          <Table>
+            <TableCaption>Results ({allSongs.length})</TableCaption>
+            <TableHeader>
+              <TableRow>
+                <TableHead onClick={() => sortTableData('band')} className='cursor-pointer'>
                   Artist
-                </th>
-                <th
-                  onClick={() => sortTableData('title')}
-                  sx={{
-                    cursor: 'pointer',
-                  }}
-                >
+                </TableHead>
+                <TableHead onClick={() => sortTableData('title')} className='cursor-pointer'>
                   Title
-                </th>
-              </tr>
-            </thead>
-            <tbody>
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {allSongs.map(song => (
-                <tr
+                <TableRow
                   key={song.url || song.filePath}
-                  sx={{
-                    cursor: 'pointer',
-                    ':not(:nth-last-of-type(-n+2))': {
-                      borderBottom: '1px solid lightGray',
-                    },
-                    ':hover': {
-                      backgroundColor: 'hover',
-                    },
-                  }}
                   onClick={() => openLyricsWindow(song.url, song?.filePath)}
-                >
-                  <td
-                    sx={{
-                      fontWeight: song?.isLocal ? 'bold' : '',
-                    }}
-                  >
-                    {song.band}
-                  </td>
-                  <td
-                    sx={{
-                      fontWeight: song?.isLocal ? 'bold' : '',
-                    }}
-                  >
-                    {song.title}
-                  </td>
-                </tr>
+                  className='cursor-pointer'>
+                  <TableCell className={song?.isLocal ? 'font-bold' : ''}>{song.band}</TableCell>
+                  <TableCell className={song?.isLocal ? 'font-bold' : ''}>{song.title}</TableCell>
+                </TableRow>
               ))}
-            </tbody>
-            <tfoot
-              sx={{
-                backgroundColor: 'header',
-                color: 'white',
-
-                borderBottomLeftRadius: 1,
-                borderBottomRightRadius: 1,
-              }}
-            >
-              <tr>
-                <td colSpan={2}>Results ({allSongs.length})</td>
-              </tr>
-            </tfoot>
-          </table>
+            </TableBody>
+          </Table>
         </Fragment>
       ) : null}
       {isSearching ? (
-        <div
-          sx={{
-            marginTop: 4,
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-          }}
-        >
-          <Spinner variant='styles.spinner' size={100} />
+        <div className='mt-4 flex items-center justify-center'>
+          <Loader2 className='h-24 w-24 animate-spin' />
         </div>
       ) : null}
     </div>
   );
 }
+
+import { Loader2 } from 'lucide-react';
 
 function Home() {
   const [foundRemoteSongs, setFoundRemoteSongs] = useState([]);
@@ -265,11 +183,7 @@ function Home() {
   };
 
   return (
-    <section
-      sx={{
-        variant: 'components.indexPage',
-      }}
-    >
+    <section className='container mx-auto p-4'>
       <Head>
         <title>Lyrics Slideshow - Index</title>
       </Head>
@@ -281,26 +195,15 @@ function Home() {
         }}
       />
 
-      <div
-        sx={{
-          display: 'grid',
-          gridTemplateColumns: '.5fr .5fr .5fr .5fr .5fr',
-          mt: 3,
-          button: {
-            variant: 'components.button.default',
-            cursor: 'pointer',
-            mr: 2,
-          },
-        }}
-      >
-        <button onClick={getAllLocalSongs}>Refresh Local Songs</button>
+      <div className='mt-4 grid grid-cols-1 gap-2 md:grid-cols-5'>
+        <Button onClick={getAllLocalSongs}>Refresh Local Songs</Button>
 
         {defaultSlides.map(item => {
           const fileName = kebabToCapitalizeText(item.split(' - ')[0]);
           return (
-            <button key={item} onClick={() => openDefaultSlides('', item)}>
+            <Button key={item} onClick={() => openDefaultSlides('', item)}>
               {fileName}
-            </button>
+            </Button>
           );
         })}
       </div>

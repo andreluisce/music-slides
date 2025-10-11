@@ -1,6 +1,10 @@
 import React, { useEffect, useState } from 'react';
-const api = typeof window !== 'undefined' ? window.api : undefined;
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import Link from 'next/link';
+
+const api = typeof window !== 'undefined' ? window.api : undefined;
 
 function Settings() {
   const [savedPath, setSavePath] = useState<string>('');
@@ -20,14 +24,16 @@ function Settings() {
   };
 
   return (
-    <div>
-      <h2>Settings</h2>
+    <div className='container mx-auto p-4'>
+      <h2 className='text-2xl font-bold mb-4'>Settings</h2>
       <div>
-        <Link href='/index'>Back</Link>
+        <Button asChild>
+          <Link href='/index'>Back</Link>
+        </Button>
       </div>
-      <div>
-        <label htmlFor='savePath'>Save path:</label>
-        <input
+      <div className='mt-4'>
+        <Label htmlFor='savePath'>Save path:</Label>
+        <Input
           type='text'
           id='savePath'
           value={savedPath as string}

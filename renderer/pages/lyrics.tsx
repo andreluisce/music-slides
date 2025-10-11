@@ -1,19 +1,12 @@
-/** @jsxRuntime classic */
-/** @jsx jsx */
-
 import React, { Fragment, useEffect, useState } from 'react';
-import { jsx, Spinner } from 'theme-ui';
-
+import Head from 'next/head';
 import queryString from 'query-string';
+import { AnimatePresence, motion } from 'framer-motion';
+import { Loader2 } from 'lucide-react';
 
 import { LogoSvg } from '../shared/Icons/Logo';
-import {
-  LoadingContainer,
-  LyricsPage,
-  LyricsPageContainer,
-  LyricsPageWrapper,
-} from '../components/LyricsPage';
-import Head from 'next/head';
+
+const api = typeof window !== 'undefined' ? window.api : undefined;
 
 function LyricsDisplayPage() {
   const [isLoading, setIsLoading] = useState(false);
@@ -78,46 +71,39 @@ function LyricsDisplayPage() {
         <title>Lyrics Slideshow - Lyrics</title>
       </Head>
 
-      <LyricsPage>
-        <video src={videoSrcBlog} autoPlay loop muted></video>
-        <LyricsPageWrapper>
-          <LyricsPageContainer>
-            {songLyric?.map?.((lyr, index) => (
-              <p
-                key={index}
-                className={
-                  index === activeIndex
-                    ? 'active'
-                    : index === activeIndex - 1
-                    ? 'prev'
-                    : index === activeIndex + 1
-                    ? 'next'
-                    : ''
-                }
-              >
-                {lyr}
-              </p>
-            ))}
-          </LyricsPageContainer>
-        </LyricsPageWrapper>
-        {isLoading ? (
-          <LoadingContainer>
-            <Spinner variant='styles.spinner' size={200} />
-          </LoadingContainer>
-        ) : null}
-        <div
-          sx={{
-            justifySelf: 'end',
-            zIndex: 100,
-            transform: 'translateY(-13rem)',
-          }}
-        >
-          <LogoSvg sx={{ width: '100px', height: '100px' }} />
+      <div className='relative h-screen w-screen overflow-hidden'>
+        <video src={videoSrcBlog} autoPlay loop muted className='absolute top-0 left-0 h-full w-full object-cover' />
+        <div className='relative z-10 flex h-full w-full items-center justify-center'>
+          <div className='text-center text-white'>
+            <AnimatePresence>
+              {songLyric?.map?.((lyr, index) => (
+                <motion.p
+                  key={index}
+                  initial={{ opacity: 0 }}
+                  animate={{
+                    opacity: index === activeIndex ? 1 : 0,
+                    display: index === activeIndex ? 'block' : 'none',
+                  }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.5 }}
+                  className='absolute'>
+                  {lyr}
+                </motion.p>
+              ))}
+            </AnimatePresence>
+          </div>
         </div>
-      </LyricsPage>
+        {isLoading ? (
+          <div className='absolute top-0 left-0 flex h-full w-full items-center justify-center bg-black bg-opacity-50'>
+            <Loader2 className='h-32 w-32 animate-spin text-white' />
+          </div>
+        ) : null}
+        <div className='absolute bottom-4 right-4 z-20'>
+          <LogoSvg className='h-24 w-24' />
+        </div>
+      </div>
     </Fragment>
   );
 }
 
 export default LyricsDisplayPage;
-const api = typeof window !== 'undefined' ? window.api : undefined;

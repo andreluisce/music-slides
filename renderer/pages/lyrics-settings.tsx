@@ -1,13 +1,9 @@
-/** @jsxRuntime classic */
-/** @jsx jsx */
-
 import React, { Fragment, useEffect, useState } from 'react';
-import { jsx } from 'theme-ui';
-
-const api = typeof window !== 'undefined' ? window.api : undefined;
-
 import Head from 'next/head';
 import queryString from 'query-string';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
+const api = typeof window !== 'undefined' ? window.api : undefined;
 
 function LyricsDisplaySettingsPage() {
   const [songLyric, setSongLyric] = useState([]);
@@ -15,16 +11,16 @@ function LyricsDisplaySettingsPage() {
   const [documentsPath, setDocumentsPath] = useState('');
   const [windowId, setWindowId] = useState(2);
 
-  const selectOnChange = (event: any) => {
-    api?.selectVideoBackground(windowId, event.target.value);
+  const selectOnChange = (value: string) => {
+    api?.selectVideoBackground(windowId, value);
   };
+
   useEffect(() => {
     api?.onLoadedLyrics(loadedLyrics => {
       setSongLyric(loadedLyrics);
     });
     setTimeout(() => {
       const { windowid } = queryString.parse(location.search);
-
       setWindowId(Number(windowid));
     }, 2000);
 
@@ -41,58 +37,35 @@ function LyricsDisplaySettingsPage() {
       <Head>
         <title>Lyrics - Slideshow Settings</title>
       </Head>
-      <div
-        sx={{
-          margin: [3],
-        }}
-      >
-                <div>
+      <div className='m-4'>
+        <div>
           <form>
             <div>
               <label>Choose the background</label>
-              <select onChange={selectOnChange}>
-                <option key='empty-option' value=''>
-                  Select a background video
-                </option>
-                {backgroundVideos.map(background => (
-                  <option key={background} value={`${documentsPath}/${background}`}>
-                    {background}
-                  </option>
-                ))}
-              </select>
+              <Select onValueChange={selectOnChange}>
+                <SelectTrigger>
+                  <SelectValue placeholder='Select a background video' />
+                </SelectTrigger>
+                <SelectContent>
+                  {backgroundVideos.map(background => (
+                    <SelectItem key={background} value={`${documentsPath}/${background}`}>
+                      {background}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </form>
         </div>
-        <div
-          sx={{
-            display: 'grid',
-            width: '95vw',
-
-            gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))',
-            gridGap: '5px',
-            color: 'lightText',
-            div: {
-              display: 'flex',
-              fontSize: '10px',
-              minHeight: '100px',
-              minWidth: '100px',
-              border: 'solid lightgrey 1px',
-              alignItems: 'center',
-              textAlign: 'center',
-              justifyContent: 'center',
-              background: 'darkBackground',
-              cursor: 'pointer',
-            },
-          }}
-        >
+        <div className='grid w-full grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-1 text-gray-300'>
           {songLyric?.map?.((lyr, index) => (
             <div
               key={index}
+              className='flex min-h-[100px] min-w-[100px] cursor-pointer items-center justify-center border border-solid border-gray-300 bg-gray-800 text-center text-xs'
               onClick={() => {
                 api?.setActiveSlide(windowId, index);
                 api?.focusTargetWindow(windowId);
-              }}
-            >
+              }}>
               {lyr}
             </div>
           ))}
