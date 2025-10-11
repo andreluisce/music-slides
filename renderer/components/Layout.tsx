@@ -8,7 +8,8 @@ import {
   Video,
   Palette,
   Settings,
-  Music2
+  Music2,
+  BookOpen
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -19,6 +20,7 @@ const menuItems = [
   { name: 'Início', icon: Home, path: '/' },
   { name: 'Biblioteca', icon: Library, path: '/library' },
   { name: 'Apresentações', icon: Presentation, path: '/presentations' },
+  { name: 'Bíblia', icon: BookOpen, path: '/bible' },
   { name: 'Vídeos', icon: Video, path: '/videos' },
   { name: 'Temas', icon: Palette, path: '/themes' },
   { name: 'Configurações', icon: Settings, path: '/settings' },

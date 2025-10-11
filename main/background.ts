@@ -124,12 +124,12 @@ export async function openLyricsWindow(url, filePath, isDefault = false) {
   });
 }
 
-ipcMain.handle('openLyricsWindow', (event, url, filePath, isDefault = false) => {
+ipcMain.handle('openLyricsWindow', (event, { url, filePath, isDefault = false }) => {
   openLyricsWindow(url, filePath, isDefault);
 });
 
-ipcMain.handle('getPath', (event, path: Parameters<typeof app.getPath>[0]) => {
-  return app.getPath(path);
+ipcMain.handle('getPath', (event, { name }) => {
+  return app.getPath(name);
 });
 
 ipcMain.handle('getAllLocalSongs', async () => {
@@ -158,7 +158,7 @@ ipcMain.handle('getDefaultSlides', async () => {
   return files.map(item => (item.includes('.txt') ? item : undefined)).filter(Boolean);
 });
 
-ipcMain.handle('findLyrics', async (_event, searchType, artist, title) => {
+ipcMain.handle('findLyrics', async (_event, { searchType, artist, title }) => {
   switch (searchType) {
     case SearchType.ByAnyParameter:
       return lyrics.findByAnyParameter(`${artist} ${title}`);
@@ -169,10 +169,10 @@ ipcMain.handle('findLyrics', async (_event, searchType, artist, title) => {
   }
 });
 
-ipcMain.handle('getLyricByUrlHandle', async (event, arg) => {
+ipcMain.handle('getLyricByUrlHandle', async (event, { url }) => {
   const regex = /^\/(.+?)\/(.+?)\.html$/;
 
-  const [, artist, title] = arg.match(regex);
+  const [, artist, title] = url.match(regex);
 
   const response = await lyrics.searchByTitleAndArtistExact({ artist, title });
 
@@ -208,7 +208,7 @@ ipcMain.handle('getLyricByUrlHandle', async (event, arg) => {
   return lyricArray;
 });
 
-ipcMain.handle('getLyricByFilePath', async (event, filePath, isDefault = false) => {
+ipcMain.handle('getLyricByFilePath', async (event, { filePath, isDefault = false }) => {
   const documentsPath = app.getPath('documents');
 
   const lyric = await fse.readFile(
@@ -234,9 +234,9 @@ ipcMain.handle('getLyricByFilePath', async (event, filePath, isDefault = false) 
 });
 
 // Listen for the 'focus-target-window' message from the renderer process
-ipcMain.on('focus-target-window', (event, targetWindowId) => {
+ipcMain.on('focus-target-window', (event, { windowId }) => {
   // Get the BrowserWindow instance of the target window by its ID
-  const targetWindow = BrowserWindow.fromId(targetWindowId);
+  const targetWindow = BrowserWindow.fromId(windowId);
 
   // Focus the target window
   if (targetWindow) {
@@ -252,10 +252,24 @@ ipcMain.handle('getBackgroundVideos', async () => {
   return files;
 });
 
-ipcMain.handle('get-bible-verse', async (_event, book, chapter, verse) => {
+ipcMain.handle('get-bible-verse', async (_event, { book, chapter, verse }) => {
   return bible.getVerse(book, chapter, verse);
 });
 
 app.on('window-all-closed', () => {
+  app.quit();
+});
+
+process.on('uncaughtException', error => {
+  console.error('Unhandled Exception in Main Process:', error);
+  // Optionally, display an error dialog to the user
+  // dialog.showErrorBox('Error', 'An unexpected error occurred. The application will now close.');
+  app.quit();
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection in Main Process:', reason, promise);
+  // Optionally, display an error dialog to the user
+  // dialog.showErrorBox('Error', 'An unexpected error occurred. The application will now close.');
   app.quit();
 });
