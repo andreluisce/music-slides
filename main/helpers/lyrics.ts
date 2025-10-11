@@ -13,6 +13,7 @@ interface SongInfo {
 
 export const smartLyricsSearch = async (userQuery: string) => {
   try {
+    console.log('Starting smartLyricsSearch for query:', userQuery);
     const interpretation = await getGeminiResponse({
       prompt: `User wants to find a song. Extract:
       - Likely song title
@@ -25,7 +26,9 @@ export const smartLyricsSearch = async (userQuery: string) => {
       Return JSON only.`
     });
 
+    console.log('Gemini interpretation raw:', interpretation);
     const { title, artist, alternatives } = JSON.parse(interpretation) as SongInfo;
+    console.log('Parsed song info - Title:', title, 'Artist:', artist, 'Alternatives:', alternatives);
 
     const sources = [
       () => findByAnyParameter(`${title} ${artist}`),
@@ -36,13 +39,17 @@ export const smartLyricsSearch = async (userQuery: string) => {
     for (const search of sources) {
       try {
         const result = await search();
-        if (result && result.length > 0) return result;
+        if (result && result.length > 0) {
+          console.log('Smart search found results:', result.length);
+          return result;
+        }
       } catch (e) {
         console.error('Error in smart search source:', e);
         continue;
       }
     }
 
+    console.log('Smart search found no results.');
     return [];
   } catch (error) {
     console.error('Error in smartLyricsSearch:', error);

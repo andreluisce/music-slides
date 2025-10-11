@@ -6,6 +6,7 @@ const genAI = new GoogleGenerativeAI(API_KEY);
 
 export const getGeminiResponse = async (params: { prompt: string }) => {
   try {
+    console.log('Gemini Prompt:', params.prompt);
     const model = genAI.getGenerativeModel({ model: "gemini-pro" });
     const result = await model.generateContent(params.prompt);
     const response = await result.response;
