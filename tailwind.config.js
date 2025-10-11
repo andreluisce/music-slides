@@ -22,6 +22,9 @@ module.exports = {
       },
     },
     extend: {
+      colors: {
+        border: 'hsl(var(--border))',
+      },
       keyframes: {
         'accordion-down': {
           from: { height: '0' },
