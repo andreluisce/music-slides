@@ -1,4 +1,4 @@
 import createWindow from './create-window';
-import * as vagalume from './vagalume';
+import * as lyrics from './lyrics';
 
-export { createWindow, vagalume };
+export { createWindow, lyrics };

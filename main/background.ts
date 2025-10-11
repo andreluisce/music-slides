@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, screen } from 'electron';
 import serve from 'electron-serve';
-import { createWindow, vagalume } from './helpers';
+import { createWindow } from './helpers';
+import * as lyrics from './helpers/lyrics';
 import sanitize from 'sanitize-filename';
 import fse from 'fs-extra';
 import createTouchBarLyrics from './helpers/create-touchbar-items';
@@ -148,11 +149,11 @@ ipcMain.handle('getDefaultSlides', async () => {
 ipcMain.handle('findLyrics', async (_event, searchType, artist, title) => {
   switch (searchType) {
     case SearchType.ByAnyParameter:
-      return vagalume.findByAnyParameter(`${artist} ${title}`);
+      return lyrics.findByAnyParameter(`${artist} ${title}`);
     case SearchType.ByTitleAndArtist:
-      return vagalume.searchByTitleAndArtist({ artist, title });
+      return lyrics.searchByTitleAndArtist({ artist, title });
     case SearchType.ByTitleAndArtistExact:
-      return vagalume.searchByTitleAndArtistExact({ artist, title });
+      return lyrics.searchByTitleAndArtistExact({ artist, title });
   }
 });
 
@@ -161,7 +162,7 @@ ipcMain.handle('getLyricByUrlHandle', async (event, arg) => {
 
   const [, artist, title] = arg.match(regex);
 
-  const response = await vagalume.searchByTitleAndArtistExact({ artist, title });
+  const response = await lyrics.searchByTitleAndArtistExact({ artist, title });
 
   const lyricArray: Array<string> = response.lyrics
     .replaceAll('/', '\n')
