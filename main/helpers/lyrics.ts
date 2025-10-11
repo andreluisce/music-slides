@@ -166,3 +166,22 @@ export const searchByTitleAndArtist = async ({ artist, title }: { artist: string
   }
   return results || [];
 };
+
+export const suggestThemeColors = async (lyrics: string) => {
+  try {
+    const colorPalette = await getGeminiResponse({
+      prompt: `Analyze the mood and emotion of the following song lyrics and suggest a matching color palette for a presentation background. Return a JSON array of 3-5 hex color codes, suitable for a gradient or theme.
+      
+      Lyrics: """${lyrics}"""
+      
+      Example of desired output format:
+      ["#RRGGBB", "#RRGGBB", "#RRGGBB"]
+      
+      Return JSON array only.`
+    });
+    return JSON.parse(colorPalette);
+  } catch (error) {
+    console.error('Error suggesting theme colors:', error);
+    return ['#000000', '#FFFFFF']; // Default colors
+  }
+};

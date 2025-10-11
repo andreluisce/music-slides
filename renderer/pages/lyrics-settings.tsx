@@ -290,10 +290,29 @@ function LyricsDisplaySettingsPage() {
                 <h3 className='text-sm font-semibold'>Fundo</h3>
               </div>
 
+              {/* AI Theme Suggestions */}
+              {songLyric.length > 0 && (
+                <div className='space-y-2'>
+                  <Button
+                    onClick={async () => {
+                      const colors = await api?.suggestThemeColors(songLyric.join('\n'));
+                      if (colors && colors.length > 0) {
+                        setGradientStart(colors[0]);
+                        setGradientEnd(colors[colors.length - 1]);
+                        setBackgroundType('gradient');
+                      }
+                    }}
+                    className='w-full bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600'>
+                    <Sparkles className='mr-2 h-4 w-4' />
+                    Sugestão de Tema AI
+                  </Button>
+                </div>
+              )}
+
               {/* Background Type Selector */}
               <Select value={backgroundType} onValueChange={(value: BackgroundType) => setBackgroundType(value)}>
                 <SelectTrigger className='border-white/20 bg-white/5 text-white'>
-                  <SelectValue />
+                  <SelectValue placeholder='Selecionar tipo de fundo' />
                 </SelectTrigger>
                 <SelectContent className='border-white/20 bg-slate-900'>
                   <SelectItem value='none' className='text-white hover:bg-white/10'>

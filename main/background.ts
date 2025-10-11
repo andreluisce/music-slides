@@ -292,6 +292,10 @@ ipcMain.handle('smart-lyrics-search', async (_event, { userQuery }) => {
   return lyrics.smartLyricsSearch(userQuery);
 });
 
+ipcMain.handle('suggest-theme-colors', async (_event, { lyrics }) => {
+  return lyrics.suggestThemeColors(lyrics);
+});
+
 ipcMain.handle('get-setting', async (_event, key) => {
   return settings.get(key);
 });
