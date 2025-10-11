@@ -184,6 +184,7 @@ function Home() {
 
   return (
     <section className='container mx-auto p-4'>
+      <h1>Hello World</h1>
       <Head>
         <title>Lyrics Slideshow - Index</title>
       </Head>
