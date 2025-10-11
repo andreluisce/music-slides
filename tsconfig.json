@@ -18,10 +18,10 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "jsx": "preserve",
-    "baseUrl": ".",
+    "baseUrl": "renderer",
     "paths": {
-      "components/*": ["renderer/components/*"],
-      "lib/utils": ["renderer/lib/utils"]
+      "components/*": ["components/*"],
+      "lib/utils": ["lib/utils"]
     }
   },
   "exclude": [
