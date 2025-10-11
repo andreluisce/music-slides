@@ -1,8 +1,8 @@
 import Genius from 'genius-api';
 
-const API_KEY = process.env.GENIUS_API_KEY;
+const ACCESS_TOKEN = process.env.GENIUS_ACCESS_TOKEN;
 
-const genius = new Genius(API_KEY);
+const genius = new Genius(ACCESS_TOKEN);
 
 export const findByAnyParameter = async (searchTerm: string) => {
   try {

@@ -1,97 +1,175 @@
-import React, { useEffect, useState } from 'react';
+import React, { Fragment, useEffect, useState } from 'react';
 import Head from 'next/head';
 import { motion } from 'framer-motion';
-import { Search, Music2, Plus, Filter, Edit, Trash2, Heart, Play } from 'lucide-react';
-import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
-import { getAllSongs, deleteSong } from '../lib/supabase-service';
-import { toggleFavorite, isFavorite } from '../lib/presentations-service';
-import type { Song } from '../lib/supabase';
-import SongModal from '../components/SongModal';
+import { getAllSongs } from '../lib/supabase-service';
+import { Loader2, Music, RefreshCw } from 'lucide-react';
 
-export default function Library() {
-  const [songs, setSongs] = useState<Song[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingSong, setEditingSong] = useState<Song | null>(null);
-  const [favorites, setFavorites] = useState<Set<string>>(new Set());
+const api = typeof window !== 'undefined' ? window.api : undefined;
+
+function kebabToCapitalizeText(str) {
+  return str
+    .split('-')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '../components/ui/table';
+
+function SongListTable({ filteredLocalSongs, foundRemoteSongs, supabaseSongs, isSearching }) {
+  const [allSongs, setAllSongs] = useState([]);
+  const [order, setOrder] = useState('asc');
+
+  const openLyricsWindow = (url, filePath) => {
+    api?.openLyricsWindow(url, filePath);
+  };
 
   useEffect(() => {
-    loadSongs();
-    loadFavorites();
-  }, []);
+    // Combinar músicas locais, remotas e do Supabase
+    const supabaseMapped = supabaseSongs.map(song => ({
+      title: song.title,
+      band: song.artist,
+      url: null,
+      filePath: null,
+      isLocal: false,
+      isSupabase: true,
+      supabaseId: song.id,
+    }));
 
-  const loadSongs = async () => {
-    setIsLoading(true);
-    try {
-      const data = await getAllSongs();
-      setSongs(data);
-    } catch (error) {
-      console.error('Error loading songs:', error);
-    } finally {
-      setIsLoading(false);
-    }
+    setAllSongs([...filteredLocalSongs, ...foundRemoteSongs, ...supabaseMapped]);
+  }, [filteredLocalSongs, foundRemoteSongs, supabaseSongs]);
+
+  const sortTableData = criteria => {
+    setOrder(order => (order === 'asc' ? 'desc' : 'asc'));
+    const orderValue = order === 'asc' ? -1 : 1;
+    const sortedData = [...allSongs].sort((a, b) => {
+      if (a[criteria].toLowerCase() < b[criteria].toLowerCase()) return -1 * orderValue;
+      if (a[criteria].toLowerCase() > b[criteria].toLowerCase()) return 1 * orderValue;
+      return 0;
+    });
+
+    setAllSongs(sortedData);
   };
 
-  const loadFavorites = async () => {
-    // Load favorite status for all songs
-    // For now, we'll check as needed
-  };
-
-  const handleToggleFavorite = async (songId: string) => {
-    try {
-      await toggleFavorite('song', songId);
-      const isFav = await isFavorite('song', songId);
-      setFavorites((prev) => {
-        const newFavs = new Set(prev);
-        if (isFav) {
-          newFavs.add(songId);
-        } else {
-          newFavs.delete(songId);
-        }
-        return newFavs;
-      });
-    } catch (error) {
-      console.error('Error toggling favorite:', error);
-    }
-  };
-
-  const handleDeleteSong = async (songId: string) => {
-    if (!confirm('Deseja realmente deletar esta música?')) return;
-
-    try {
-      await deleteSong(songId);
-      loadSongs();
-    } catch (error) {
-      console.error('Error deleting song:', error);
-    }
-  };
-
-  const handleEditSong = (song: Song) => {
-    setEditingSong(song);
-    setIsModalOpen(true);
-  };
-
-  const handleNewSong = () => {
-    setEditingSong(null);
-    setIsModalOpen(true);
-  };
-
-  const handleModalClose = () => {
-    setIsModalOpen(false);
-    setEditingSong(null);
-  };
-
-  const handleModalSave = () => {
-    loadSongs();
-  };
-
-  const filteredSongs = songs.filter(
-    (song) =>
-      song.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      song.artist.toLowerCase().includes(searchQuery.toLowerCase())
+  return (
+    <div className='space-y-4'>
+      {filteredLocalSongs.length || foundRemoteSongs.length ? (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className='rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur-sm'>
+          <div className='mb-4 flex items-center justify-between'>
+            <div className='flex items-center gap-2'>
+              <Music className='h-6 w-6 text-blue-400' />
+              <h2 className='text-xl font-semibold text-white'>Músicas ({allSongs.length})</h2>
+            </div>
+            <div className='flex gap-2 text-sm text-slate-400'>
+              <button
+                onClick={() => sortTableData('band')}
+                className='rounded-lg bg-white/5 px-3 py-1 transition-colors hover:bg-white/10'>
+                Ordenar por Artista
+              </button>
+              <button
+                onClick={() => sortTableData('title')}
+                className='rounded-lg bg-white/5 px-3 py-1 transition-colors hover:bg-white/10'>
+                Ordenar por Título
+              </button>
+            </div>
+          </div>
+          <div className='grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3'>
+            {allSongs.map((song, index) => (
+              <motion.div
+                key={song.url || song.filePath}
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.3, delay: index * 0.05 }}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => openLyricsWindow(song.url, song?.filePath)}
+                className='group cursor-pointer rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-white/10 p-4 transition-all hover:border-purple-500/50 hover:from-purple-500/10 hover:to-pink-500/10 hover:shadow-lg hover:shadow-purple-500/20'>
+                <div className='flex items-start gap-3'>
+                  <div className='mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-purple-500/30 to-pink-500/30'>
+                    <Music2 className='h-5 w-5 text-purple-300' />
+                  </div>
+                  <div className='flex flex-1 flex-col'>
+                    <h3
+                      className={`text-lg font-semibold ${song?.isLocal ? 'text-purple-300' : 'text-white'}`}>
+                      {song.title}
+                    </h3>
+                    <p className='mt-1 text-sm text-slate-400'>{song.band}</p>
+                  </div>
+                  <div className='flex flex-col gap-1'>
+                    {song?.isLocal && (
+                      <span className='rounded-full bg-purple-500/20 px-2 py-1 text-xs text-purple-300'>
+                        Local
+                      </span>
+                    )}
+                    {song?.isSupabase && (
+                      <span className='rounded-full bg-blue-500/20 px-2 py-1 text-xs text-blue-300'>
+                        Cloud
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </motion.div>
+      ) : null}
+      {isSearching ? (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className='flex items-center justify-center py-12'>
+          <Loader2 className='h-12 w-12 animate-spin text-purple-500' />
+        </motion.div>
+      ) : null}
+    </div>
   );
+}
+
+function Library() {
+  const [filteredLocalSongs, setFilteredLocalSongs] = useState([]);
+  const [supabaseSongs, setSupabaseSongs] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+
+  const getAllLocalSongs = () =>
+    api?.getAllLocalSongs()?.then(songs => {
+      setFilteredLocalSongs(
+        songs.map(song => {
+          const songArray = song?.replaceAll('.txt', '')?.split?.(' - ');
+          return {
+            filePath: song,
+            title: songArray[1],
+            band: songArray[0],
+            isLocal: true,
+          };
+        })
+      );
+    });
+
+  const loadSupabaseSongs = async () => {
+    try {
+      const songs = await getAllSongs();
+      setSupabaseSongs(songs);
+      console.log('✅ Supabase songs loaded:', songs.length);
+    } catch (error) {
+      console.error('❌ Error loading Supabase songs:', error);
+    }
+  };
+
+  useEffect(() => {
+    getAllLocalSongs();
+    loadSupabaseSongs();
+  }, []);
 
   return (
     <div className='h-full'>
@@ -100,102 +178,28 @@ export default function Library() {
       </Head>
 
       <div className='p-8'>
-        {/* Header */}
-        <div className='mb-8'>
-          <h1 className='text-3xl font-bold text-white'>Biblioteca de Músicas</h1>
-          <p className='mt-2 text-slate-400'>Gerencie todas as suas músicas em um só lugar</p>
-        </div>
-
-        {/* Actions Bar */}
-        <div className='mb-6 flex items-center gap-4'>
-          <div className='relative flex-1'>
-            <Search className='absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400' />
-            <Input
-              type='text'
-              placeholder='Buscar músicas...'
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className='border-white/20 bg-white/10 pl-10 text-white placeholder:text-slate-400'
-            />
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className='mb-8 rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur-sm'>
+          <div className='mb-4 flex items-center gap-2'>
+            <Music className='h-6 w-6 text-blue-400' />
+            <h2 className='text-xl font-semibold text-white'>Minha Biblioteca</h2>
           </div>
-          <Button
-            onClick={handleNewSong}
-            className='bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700'>
-            <Plus className='mr-2 h-4 w-4' />
-            Nova Música
-          </Button>
-        </div>
-
-        {/* Songs Grid */}
-        {isLoading ? (
-          <div className='flex h-64 items-center justify-center'>
-            <div className='text-slate-400'>Carregando...</div>
+          <div className='mb-6 flex gap-3'>
+            <Button
+              onClick={getAllLocalSongs}
+              className='flex items-center gap-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700'>
+              <RefreshCw className='h-4 w-4' />
+              Atualizar Músicas Locais
+            </Button>
           </div>
-        ) : filteredSongs.length === 0 ? (
-          <div className='flex h-64 flex-col items-center justify-center'>
-            <Music2 className='h-16 w-16 text-slate-600' />
-            <p className='mt-4 text-slate-400'>
-              {searchQuery ? 'Nenhuma música encontrada' : 'Nenhuma música na biblioteca'}
-            </p>
-          </div>
-        ) : (
-          <div className='grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'>
-            {filteredSongs.map((song, index) => (
-              <motion.div
-                key={song.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, delay: index * 0.05 }}
-                className='group rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-white/10 p-4 transition-all hover:border-purple-500/50 hover:from-purple-500/10 hover:to-pink-500/10 hover:shadow-lg hover:shadow-purple-500/20'>
-                <div className='flex items-start gap-3'>
-                  <div className='flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-purple-500/30 to-pink-500/30'>
-                    <Music2 className='h-6 w-6 text-purple-300' />
-                  </div>
-                  <div className='flex-1 overflow-hidden'>
-                    <h3 className='truncate text-lg font-semibold text-white'>{song.title}</h3>
-                    <p className='truncate text-sm text-slate-400'>{song.artist}</p>
-                    <p className='mt-2 text-xs text-slate-500'>{song.lyrics?.length || 0} linhas</p>
-                  </div>
-                </div>
-                <div className='mt-3 flex gap-2'>
-                  <Button
-                    onClick={() => handleToggleFavorite(song.id)}
-                    size='sm'
-                    variant='outline'
-                    className={`flex-1 border-white/20 ${
-                      favorites.has(song.id)
-                        ? 'bg-pink-500/20 text-pink-400 hover:bg-pink-500/30'
-                        : 'bg-white/5 text-white hover:bg-white/10'
-                    }`}>
-                    <Heart className={`h-4 w-4 ${favorites.has(song.id) ? 'fill-current' : ''}`} />
-                  </Button>
-                  <Button
-                    onClick={() => handleEditSong(song)}
-                    size='sm'
-                    variant='outline'
-                    className='flex-1 border-white/20 bg-white/5 text-white hover:bg-white/10'>
-                    <Edit className='h-4 w-4' />
-                  </Button>
-                  <Button
-                    onClick={() => handleDeleteSong(song.id)}
-                    size='sm'
-                    variant='outline'
-                    className='border-red-500/20 bg-red-500/5 text-red-400 hover:bg-red-500/10'>
-                    <Trash2 className='h-4 w-4' />
-                  </Button>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        )}
-
-        <SongModal
-          isOpen={isModalOpen}
-          onClose={handleModalClose}
-          onSave={handleModalSave}
-          song={editingSong}
-        />
+          <SongListTable {...{ filteredLocalSongs, supabaseSongs, isSearching }} />
+        </motion.div>
       </div>
     </div>
   );
 }
+
+export default Library;

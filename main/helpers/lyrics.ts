@@ -1,5 +1,7 @@
 import * as vagalume from './lyrics-providers/vagalume.provider';
 import * as genius from './lyrics-providers/genius.provider';
+import * as lyricsovh from './lyrics-providers/lyricsovh.provider';
+import { interpretLyricsQuery, cleanLyrics } from './ai-service';
 import { getGeminiResponse } from './gemini';
 import { SearchType } from '../../renderer/shared/types';
 
@@ -13,51 +15,87 @@ interface SongInfo {
 
 export const smartLyricsSearch = async (userQuery: string) => {
   try {
-    console.log('Starting smartLyricsSearch for query:', userQuery);
-    const interpretation = await getGeminiResponse({
-      prompt: `User wants to find a song. Extract:
-      - Likely song title
-      - Likely artist
-      - Genre/theme
-      - Alternative titles
-      
-      Query: "${userQuery}"
-      
-      Return JSON only.`
+    console.log('🔍 Starting smart search for:', userQuery);
+
+    // Step 1: AI interprets the vague/fuzzy query
+    const interpretation = await interpretLyricsQuery(userQuery);
+    const { title, artist, alternatives, confidence } = interpretation;
+
+    console.log(`🤖 AI Interpretation (${confidence}% confidence):`, {
+      title,
+      artist,
+      alternatives: alternatives.length
     });
 
-    console.log('Gemini interpretation raw:', interpretation);
-    if (!interpretation) {
-      console.error('Gemini interpretation is null or empty. Cannot parse JSON.');
-      return [];
-    }
-    const { title, artist, alternatives } = JSON.parse(interpretation) as SongInfo;
-    console.log('Parsed song info - Title:', title, 'Artist:', artist, 'Alternatives:', alternatives);
-
-    const sources = [
-      () => findByAnyParameter(`${title} ${artist}`),
-      () => searchByTitleAndArtistExact({ title, artist }),
-      ...(alternatives || []).map(alt => () => findByAnyParameter(`${alt.title} ${alt.artist}`)),
+    // Step 2: Try multiple sources in priority order
+    const searchAttempts = [
+      // Primary attempt with AI interpretation
+      {
+        name: 'Lyrics.ovh (Primary)',
+        search: () => lyricsovh.searchByTitleAndArtist({ title, artist })
+      },
+      {
+        name: 'Genius (Primary)',
+        search: () => genius.searchByTitleAndArtistExact({ title, artist })
+      },
+      {
+        name: 'Vagalume (Primary)',
+        search: () => vagalume.searchByTitleAndArtistExact({ title, artist })
+      },
+      // Try alternatives
+      ...alternatives.flatMap(alt => [
+        {
+          name: `Lyrics.ovh (Alt: ${alt.title})`,
+          search: () => lyricsovh.searchByTitleAndArtist({ title: alt.title, artist: alt.artist })
+        },
+        {
+          name: `Genius (Alt: ${alt.title})`,
+          search: () => genius.searchByTitleAndArtistExact({ title: alt.title, artist: alt.artist })
+        }
+      ]),
+      // Broad search as last resort
+      {
+        name: 'Broad search (Genius)',
+        search: () => findByAnyParameter(`${title} ${artist}`)
+      }
     ];
 
-    for (const search of sources) {
+    // Try each source
+    for (const attempt of searchAttempts) {
       try {
-        const result = await search();
-        if (result && result.length > 0) {
-          console.log('Smart search found results:', result.length);
-          return result;
+        console.log(`🔎 Trying: ${attempt.name}`);
+        const result = await attempt.search();
+
+        if (result) {
+          // Handle different response formats
+          if (Array.isArray(result)) {
+            if (result.length > 0) {
+              console.log(`✅ Found ${result.length} results via ${attempt.name}`);
+              return result;
+            }
+          } else if (result.lyrics && result.lyrics.length > 0) {
+            console.log(`✅ Found lyrics via ${attempt.name}`);
+            // Convert single result to array format
+            return [{
+              title: result.title,
+              artist: result.artist,
+              url: `/lyrics/${encodeURIComponent(result.artist)}/${encodeURIComponent(result.title)}.html`,
+              lyrics: result.lyrics
+            }];
+          }
         }
-      } catch (e) {
-        console.error('Error in smart search source:', e);
+      } catch (error) {
+        console.log(`❌ ${attempt.name} failed:`, error.message);
         continue;
       }
     }
 
-    console.log('Smart search found no results.');
+    console.log('❌ No results found from any source');
     return [];
   } catch (error) {
-    console.error('Error in smartLyricsSearch:', error);
-    return [];
+    console.error('❌ Error in smartLyricsSearch:', error);
+    // Fallback to basic search
+    return findByAnyParameter(userQuery);
   }
 };
 

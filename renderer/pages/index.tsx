@@ -194,6 +194,7 @@ function SongListTable({ filteredLocalSongs, foundRemoteSongs, supabaseSongs, is
 }
 
 import { Loader2, Music, Search, RefreshCw, Play, Music2 } from 'lucide-react';
+import Link from 'next/link';
 
 function Home() {
   const [foundRemoteSongs, setFoundRemoteSongs] = useState([]);
@@ -318,10 +319,16 @@ function Home() {
             <RefreshCw className='h-4 w-4' />
             Atualizar Músicas Locais
           </Button>
+          <Button asChild className='flex items-center gap-2 bg-gradient-to-r from-green-600 to-teal-600 hover:from-green-700 hover:to-teal-700'>
+            <Link href='/library'>
+              <Music className='h-4 w-4' />
+              Ir para Biblioteca
+            </Link>
+          </Button>
         </motion.div>
 
         {/* Songs List */}
-        <SongListTable {...{ filteredLocalSongs, foundRemoteSongs, supabaseSongs, isSearching }} />
+        {/* <SongListTable {...{ filteredLocalSongs, foundRemoteSongs, supabaseSongs, isSearching }} /> */}
       </div>
     </div>
   );
