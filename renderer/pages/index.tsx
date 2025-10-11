@@ -19,19 +19,14 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 
 function SearchForm({ isSearching, setFoundRemoteSongs, setIsSearching }) {
-  const [artist, setArtist] = useState('');
-  const [title, setTitle] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
 
   const submitForm = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setFoundRemoteSongs([]);
     setIsSearching(true);
     try {
-      const result = await api?.findLyrics(
-        SearchType.ByAnyParameter,
-        `${artist}`.trim(),
-        `${title}`.trim()
-      );
+      const result = await api?.smartLyricsSearch(searchTerm.trim());
 
       setIsSearching(false);
 
@@ -46,42 +41,26 @@ function SearchForm({ isSearching, setFoundRemoteSongs, setIsSearching }) {
 
   return (
     <form onSubmit={submitForm} className='grid grid-cols-1 gap-4 md:grid-cols-3'>
-      <div className='flex flex-col gap-2'>
-        <Label htmlFor='artist' className='text-slate-300'>
-          Artista
+      <div className='flex flex-col gap-2 col-span-2'>
+        <Label htmlFor='search' className='text-slate-300'>
+          Buscar Músicas
         </Label>
         <Input
-          name='artist'
-          id='artist'
-          value={artist}
-          placeholder='Ex: Diante do trono'
+          name='search'
+          id='search'
+          value={searchTerm}
+          placeholder='Ex: Diante do trono Clame ao Senhor ou aquela música sobre esperança'
           className='border-white/20 bg-white/10 text-white placeholder:text-slate-400'
           onChange={event => {
             const text = event.target.value;
-            setArtist(text);
-          }}
-        />
-      </div>
-      <div className='flex flex-col gap-2'>
-        <Label htmlFor='title' className='text-slate-300'>
-          Título da Música
-        </Label>
-        <Input
-          name='title'
-          id='title'
-          value={title}
-          placeholder='Ex: Clame ao Senhor'
-          className='border-white/20 bg-white/10 text-white placeholder:text-slate-400'
-          onChange={event => {
-            const text = event.target.value;
-            setTitle(text);
+            setSearchTerm(text);
           }}
         />
       </div>
 
       <div className='flex items-end'>
         <Button
-          disabled={(!artist && !title) || isSearching}
+          disabled={!searchTerm || isSearching}
           type='submit'
           className='w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700'>
           {isSearching ? 'Buscando...' : 'Buscar'}

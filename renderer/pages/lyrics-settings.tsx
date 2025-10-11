@@ -1,43 +1,27 @@
 import React, { Fragment, useEffect, useState } from 'react';
 import Head from 'next/head';
 import queryString from 'query-string';
-import { motion } from 'framer-motion';
-import { Video, Play, Film, CheckCircle2, Palette, Type, Sparkles } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ChevronRight, Palette, Type, Video, Play, Image as ImageIcon, Droplet } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from 'components/ui/select';
 import { Label } from 'components/ui/label';
 import { Input } from 'components/ui/input';
-import { Button } from 'components/ui/button';
 import { getAllThemes } from '../lib/supabase-service';
 import type { Theme } from '../lib/supabase';
 
 const api = typeof window !== 'undefined' ? window.api : undefined;
 
-const fontFamilies = [
-  'Montserrat',
-  'Arial',
-  'Helvetica',
-  'Times New Roman',
-  'Georgia',
-  'Bebas Neue',
-  'Roboto',
-  'Open Sans',
-];
+type BackgroundType = 'none' | 'video' | 'color' | 'gradient' | 'image';
 
-const fontWeights = [
-  { label: 'Thin', value: '100' },
-  { label: 'Light', value: '300' },
-  { label: 'Regular', value: '400' },
-  { label: 'Medium', value: '500' },
-  { label: 'Semi Bold', value: '600' },
-  { label: 'Bold', value: '700' },
-  { label: 'Black', value: '900' },
-];
-
-const animationTypes = [
-  { value: 'fade', label: 'Fade' },
-  { value: 'slide', label: 'Slide' },
-  { value: 'zoom', label: 'Zoom' },
-  { value: 'none', label: 'Nenhuma' },
+const GRADIENT_PRESETS = [
+  { name: 'Roxo Escuro', start: '#667eea', end: '#764ba2' },
+  { name: 'Azul Oceano', start: '#2E3192', end: '#1BFFFF' },
+  { name: 'Pôr do Sol', start: '#FF512F', end: '#F09819' },
+  { name: 'Floresta', start: '#134E5E', end: '#71B280' },
+  { name: 'Rosa Suave', start: '#ee9ca7', end: '#ffdde1' },
+  { name: 'Noite Estrelada', start: '#0f2027', end: '#2c5364' },
+  { name: 'Fogo', start: '#f12711', end: '#f5af19' },
+  { name: 'Aurora', start: '#a8edea', end: '#fed6e3' },
 ];
 
 function LyricsDisplaySettingsPage() {
@@ -46,20 +30,19 @@ function LyricsDisplaySettingsPage() {
   const [documentsPath, setDocumentsPath] = useState('');
   const [windowId, setWindowId] = useState(2);
   const [activeSlideIndex, setActiveSlideIndex] = useState(0);
-
-  // Theme controls
   const [themes, setThemes] = useState<Theme[]>([]);
   const [selectedThemeId, setSelectedThemeId] = useState<string>('');
-  const [fontFamily, setFontFamily] = useState('Montserrat');
   const [fontSize, setFontSize] = useState(72);
-  const [fontWeight, setFontWeight] = useState('700');
-  const [textColor, setTextColor] = useState('#FFFFFF');
-  const [textShadow, setTextShadow] = useState('2px 2px 8px rgba(0,0,0,0.9)');
-  const [animationType, setAnimationType] = useState('fade');
 
-  const selectOnChange = (value: string) => {
-    api?.selectVideoBackground(windowId, value);
-  };
+  // Background settings
+  const [backgroundType, setBackgroundType] = useState<BackgroundType>('none');
+  const [solidColor, setSolidColor] = useState('#1a1a2e');
+  const [gradientStart, setGradientStart] = useState('#667eea');
+  const [gradientEnd, setGradientEnd] = useState('#764ba2');
+  const [backgroundImage, setBackgroundImage] = useState<string>('');
+
+  // Logo settings
+  const [logoImage, setLogoImage] = useState<string>('');
 
   const handleSlideClick = (index: number) => {
     setActiveSlideIndex(index);
@@ -73,11 +56,10 @@ function LyricsDisplaySettingsPage() {
       try {
         const themesData = await getAllThemes();
         setThemes(themesData);
-
-        // Set default theme
         const defaultTheme = themesData.find(t => t.is_default) || themesData[0];
         if (defaultTheme) {
           setSelectedThemeId(defaultTheme.id);
+          setFontSize(defaultTheme.font_size);
           applyTheme(defaultTheme);
         }
       } catch (error) {
@@ -88,15 +70,8 @@ function LyricsDisplaySettingsPage() {
   }, []);
 
   const applyTheme = (theme: Theme) => {
-    setFontFamily(theme.font_family);
     setFontSize(theme.font_size);
-    setFontWeight(theme.font_weight.toString());
-    setTextColor(theme.text_color);
-    setTextShadow(theme.text_shadow);
-    setAnimationType(theme.animation_type);
-
-    // Send to lyrics window
-    sendThemeUpdate({
+    api?.updateLyricsTheme?.(windowId, {
       fontFamily: theme.font_family,
       fontSize: theme.font_size,
       fontWeight: theme.font_weight,
@@ -114,48 +89,97 @@ function LyricsDisplaySettingsPage() {
     }
   };
 
-  const sendThemeUpdate = (themeData: any) => {
-    api?.updateLyricsTheme?.(windowId, themeData);
-  };
-
-  const handleFontFamilyChange = (value: string) => {
-    setFontFamily(value);
-    sendThemeUpdate({ fontFamily: value, fontSize, fontWeight: Number(fontWeight), textColor, textShadow, animationType });
-  };
-
   const handleFontSizeChange = (value: number) => {
     setFontSize(value);
-    sendThemeUpdate({ fontFamily, fontSize: value, fontWeight: Number(fontWeight), textColor, textShadow, animationType });
+    const theme = themes.find(t => t.id === selectedThemeId);
+    if (theme) {
+      api?.updateLyricsTheme?.(windowId, {
+        fontFamily: theme.font_family,
+        fontSize: value,
+        fontWeight: theme.font_weight,
+        textColor: theme.text_color,
+        textShadow: theme.text_shadow,
+        animationType: theme.animation_type,
+      });
+    }
   };
 
-  const handleFontWeightChange = (value: string) => {
-    setFontWeight(value);
-    sendThemeUpdate({ fontFamily, fontSize, fontWeight: Number(value), textColor, textShadow, animationType });
+  const selectVideoBackground = (value: string) => {
+    api?.selectVideoBackground(windowId, value);
   };
 
-  const handleTextColorChange = (value: string) => {
-    setTextColor(value);
-    sendThemeUpdate({ fontFamily, fontSize, fontWeight: Number(fontWeight), textColor: value, textShadow, animationType });
+  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64Image = reader.result as string;
+        setBackgroundImage(base64Image);
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
-  const handleTextShadowChange = (value: string) => {
-    setTextShadow(value);
-    sendThemeUpdate({ fontFamily, fontSize, fontWeight: Number(fontWeight), textColor, textShadow: value, animationType });
+  const handleLogoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64Logo = reader.result as string;
+        setLogoImage(base64Logo);
+        // Save to settings
+        api?.setSetting('customLogo', base64Logo);
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
-  const handleAnimationChange = (value: string) => {
-    setAnimationType(value);
-    sendThemeUpdate({ fontFamily, fontSize, fontWeight: Number(fontWeight), textColor, textShadow, animationType: value });
-  };
-
+  // Apply background based on type
   useEffect(() => {
-    api?.onLoadedLyrics(loadedLyrics => {
+    if (windowId === 2) return; // Wait for window ID to be set
+
+    switch (backgroundType) {
+      case 'none':
+        api?.selectVideoBackground(windowId, '');
+        api?.setCustomBackground(windowId, '');
+        break;
+      case 'color':
+        api?.setCustomBackground(windowId, solidColor);
+        api?.selectVideoBackground(windowId, ''); // Clear video
+        break;
+      case 'gradient':
+        api?.setCustomBackground(windowId, `linear-gradient(135deg, ${gradientStart}, ${gradientEnd})`);
+        api?.selectVideoBackground(windowId, ''); // Clear video
+        break;
+      case 'video':
+        api?.setCustomBackground(windowId, ''); // Clear custom background
+        break;
+      case 'image':
+        if (backgroundImage) {
+          api?.setCustomBackground(windowId, `url(${backgroundImage}) center/cover no-repeat`);
+          api?.selectVideoBackground(windowId, ''); // Clear video
+        }
+        break;
+    }
+  }, [backgroundType, solidColor, gradientStart, gradientEnd, backgroundImage, windowId]);
+
+  // Set up lyrics listener only once
+  useEffect(() => {
+    console.log('🎵 Settings: Setting up onLoadedLyrics listener');
+
+    const handleLoadedLyrics = (loadedLyrics: string[]) => {
+      console.log('📥 Settings: Received lyrics:', loadedLyrics?.length || 0, 'lines');
       setSongLyric(loadedLyrics);
-    });
-    setTimeout(() => {
-      const { windowid } = queryString.parse(location.search);
-      setWindowId(Number(windowid));
-    }, 2000);
+    };
+
+    api?.onLoadedLyrics(handleLoadedLyrics);
+  }, []); // Empty deps - run only once
+
+  // Set up window ID and paths
+  useEffect(() => {
+    const { windowid } = queryString.parse(location.search);
+    console.log('🪟 Settings: Window ID set to:', windowid);
+    setWindowId(Number(windowid));
 
     api?.getPath('documents').then(path => {
       const videosPath = `${path}/lyrics-slide-show/videos`;
@@ -164,14 +188,21 @@ function LyricsDisplaySettingsPage() {
 
     api?.getBackgroundVideos().then(videos => setBackgroundVideos(videos));
 
-    // Keyboard navigation
+    // Load custom logo from settings
+    api?.getSetting('customLogo').then(logo => {
+      if (logo) {
+        setLogoImage(logo);
+      }
+    });
+  }, []);
+
+  // Keyboard navigation
+  useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.keyCode === 37 || event.keyCode === 38) {
-        // Left arrow or Up arrow
         const newIndex = activeSlideIndex === 0 ? 0 : activeSlideIndex - 1;
         handleSlideClick(newIndex);
       } else if (event.keyCode === 39 || event.keyCode === 40) {
-        // Right arrow or Down arrow
         const newIndex = activeSlideIndex === songLyric.length - 1 ? activeSlideIndex : activeSlideIndex + 1;
         handleSlideClick(newIndex);
       }
@@ -186,338 +217,368 @@ function LyricsDisplaySettingsPage() {
   return (
     <Fragment>
       <Head>
-        <title>Lyrics - Slideshow Settings</title>
+        <title>Controle - Lyrics Slideshow</title>
       </Head>
 
-      <div className='min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900'>
-        <div className='p-6'>
-          {/* Header */}
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className='mb-6'>
-            <h1 className='text-2xl font-bold text-white'>Controle de Apresentação</h1>
-            <p className='mt-1 text-sm text-slate-400'>
-              Gerencie os slides e configurações da apresentação
-            </p>
-          </motion.div>
-
-          <div className='grid grid-cols-1 gap-6 lg:grid-cols-2'>
-            {/* Left Column */}
-            <div className='space-y-6'>
-              {/* Theme Selection */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.1 }}
-                className='rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur-sm'>
-                <div className='mb-4 flex items-center gap-2'>
-                  <Palette className='h-5 w-5 text-purple-400' />
-                  <h2 className='text-lg font-semibold text-white'>Tema Visual</h2>
-                </div>
-
-                <div className='space-y-4'>
-                  <div>
-                    <Label htmlFor='theme-select' className='text-slate-300'>
-                      Escolha um tema
-                    </Label>
-                    <Select value={selectedThemeId} onValueChange={handleThemeChange}>
-                      <SelectTrigger
-                        id='theme-select'
-                        className='mt-1 border-white/20 bg-white/10 text-white'>
-                        <SelectValue placeholder='Selecione um tema' />
-                      </SelectTrigger>
-                      <SelectContent className='border-white/20 bg-slate-900'>
-                        {themes.map(theme => (
-                          <SelectItem
-                            key={theme.id}
-                            value={theme.id}
-                            className='text-white hover:bg-white/10'>
-                            <div className='flex items-center gap-2'>
-                              <Sparkles className='h-4 w-4 text-purple-400' />
-                              {theme.name}
-                              {theme.is_default && (
-                                <span className='ml-2 text-xs text-yellow-400'>(Padrão)</span>
-                              )}
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </motion.div>
-
-              {/* Typography Controls */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.2 }}
-                className='rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur-sm'>
-                <div className='mb-4 flex items-center gap-2'>
-                  <Type className='h-5 w-5 text-pink-400' />
-                  <h2 className='text-lg font-semibold text-white'>Tipografia</h2>
-                </div>
-
-                <div className='space-y-4'>
-                  {/* Font Family */}
-                  <div>
-                    <Label htmlFor='font-family' className='text-slate-300'>
-                      Fonte
-                    </Label>
-                    <Select value={fontFamily} onValueChange={handleFontFamilyChange}>
-                      <SelectTrigger
-                        id='font-family'
-                        className='mt-1 border-white/20 bg-white/10 text-white'>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent className='border-white/20 bg-slate-900'>
-                        {fontFamilies.map(font => (
-                          <SelectItem
-                            key={font}
-                            value={font}
-                            className='text-white hover:bg-white/10'>
-                            {font}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {/* Font Size */}
-                  <div>
-                    <Label htmlFor='font-size' className='text-slate-300'>
-                      Tamanho: {fontSize}px
-                    </Label>
-                    <input
-                      type='range'
-                      id='font-size'
-                      min='24'
-                      max='120'
-                      value={fontSize}
-                      onChange={e => handleFontSizeChange(Number(e.target.value))}
-                      className='mt-2 w-full accent-purple-500'
-                    />
-                    <div className='mt-1 flex justify-between text-xs text-slate-500'>
-                      <span>24px</span>
-                      <span>120px</span>
-                    </div>
-                  </div>
-
-                  {/* Font Weight */}
-                  <div>
-                    <Label htmlFor='font-weight' className='text-slate-300'>
-                      Peso da Fonte
-                    </Label>
-                    <Select value={fontWeight} onValueChange={handleFontWeightChange}>
-                      <SelectTrigger
-                        id='font-weight'
-                        className='mt-1 border-white/20 bg-white/10 text-white'>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent className='border-white/20 bg-slate-900'>
-                        {fontWeights.map(weight => (
-                          <SelectItem
-                            key={weight.value}
-                            value={weight.value}
-                            className='text-white hover:bg-white/10'>
-                            {weight.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {/* Text Color */}
-                  <div>
-                    <Label htmlFor='text-color' className='text-slate-300'>
-                      Cor do Texto
-                    </Label>
-                    <div className='mt-2 flex gap-2'>
-                      <input
-                        type='color'
-                        id='text-color'
-                        value={textColor}
-                        onChange={e => handleTextColorChange(e.target.value)}
-                        className='h-10 w-20 cursor-pointer rounded border border-white/20'
-                      />
-                      <Input
-                        value={textColor}
-                        onChange={e => handleTextColorChange(e.target.value)}
-                        className='flex-1 border-white/20 bg-white/10 text-white'
-                      />
-                    </div>
-                  </div>
-
-                  {/* Text Shadow */}
-                  <div>
-                    <Label htmlFor='text-shadow' className='text-slate-300'>
-                      Sombra do Texto
-                    </Label>
-                    <Input
-                      id='text-shadow'
-                      value={textShadow}
-                      onChange={e => handleTextShadowChange(e.target.value)}
-                      placeholder='Ex: 2px 2px 8px rgba(0,0,0,0.9)'
-                      className='mt-1 border-white/20 bg-white/10 text-white placeholder:text-slate-400'
-                    />
-                  </div>
-
-                  {/* Animation Type */}
-                  <div>
-                    <Label htmlFor='animation' className='text-slate-300'>
-                      Animação
-                    </Label>
-                    <Select value={animationType} onValueChange={handleAnimationChange}>
-                      <SelectTrigger
-                        id='animation'
-                        className='mt-1 border-white/20 bg-white/10 text-white'>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent className='border-white/20 bg-slate-900'>
-                        {animationTypes.map(anim => (
-                          <SelectItem
-                            key={anim.value}
-                            value={anim.value}
-                            className='text-white hover:bg-white/10'>
-                            {anim.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </motion.div>
-
-              {/* Background Video Selection */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.3 }}
-                className='rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur-sm'>
-                <div className='mb-4 flex items-center gap-2'>
-                  <Video className='h-5 w-5 text-purple-400' />
-                  <h2 className='text-lg font-semibold text-white'>Vídeo de Fundo</h2>
-                </div>
-
-                <div className='space-y-2'>
-                  <Label htmlFor='video-select' className='text-slate-300'>
-                    Escolha um vídeo de fundo
-                  </Label>
-                  <Select onValueChange={selectOnChange}>
-                    <SelectTrigger
-                      id='video-select'
-                      className='border-white/20 bg-white/10 text-white'>
-                      <SelectValue placeholder='Selecione um vídeo de fundo' />
-                    </SelectTrigger>
-                    <SelectContent className='border-white/20 bg-slate-900'>
-                      {backgroundVideos.length === 0 ? (
-                        <SelectItem value='none' disabled className='text-slate-500'>
-                          Nenhum vídeo disponível
-                        </SelectItem>
-                      ) : (
-                        backgroundVideos.map(background => (
-                          <SelectItem
-                            key={background}
-                            value={`${documentsPath}/${background}`}
-                            className='text-white hover:bg-white/10'>
-                            <div className='flex items-center gap-2'>
-                              <Film className='h-4 w-4 text-purple-400' />
-                              {background}
-                            </div>
-                          </SelectItem>
-                        ))
-                      )}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </motion.div>
-            </div>
-
-            {/* Right Column - Slides Grid */}
+      <div className='flex h-screen bg-gradient-to-br from-slate-950 via-purple-950 to-slate-950'>
+        {/* Sidebar - Controls */}
+        <div className='w-80 flex-shrink-0 border-r border-white/10 bg-black/20 backdrop-blur-sm overflow-y-auto'>
+          <div className='p-6 space-y-6'>
+            {/* Header */}
             <div>
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.4 }}
-                className='rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur-sm'>
-                <div className='mb-4 flex items-center gap-2'>
-                  <Play className='h-5 w-5 text-pink-400' />
-                  <h2 className='text-lg font-semibold text-white'>
-                    Slides ({songLyric.length})
-                  </h2>
-                </div>
-
-                {songLyric.length === 0 ? (
-                  <div className='flex h-[600px] flex-col items-center justify-center rounded-xl border border-white/10 bg-white/5'>
-                    <Play className='h-16 w-16 text-slate-600' />
-                    <p className='mt-4 text-slate-400'>Aguardando letras...</p>
-                  </div>
-                ) : (
-                  <div className='grid max-h-[600px] grid-cols-2 gap-3 overflow-y-auto pr-2'>
-                    {songLyric?.map?.((lyr, index) => (
-                      <motion.div
-                        key={index}
-                        initial={{ opacity: 0, scale: 0.9 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ duration: 0.3, delay: index * 0.02 }}
-                        whileHover={{ scale: 1.05, y: -5 }}
-                        whileTap={{ scale: 0.95 }}
-                        onClick={() => handleSlideClick(index)}
-                        className={`group relative cursor-pointer overflow-hidden rounded-xl border transition-all ${
-                          activeSlideIndex === index
-                            ? 'border-purple-500 bg-gradient-to-br from-purple-500/20 to-pink-500/20 shadow-lg shadow-purple-500/20'
-                            : 'border-white/10 bg-gradient-to-br from-white/5 to-white/10 hover:border-purple-500/50 hover:from-purple-500/10 hover:to-pink-500/10'
-                        }`}>
-                        <div className='flex min-h-[120px] flex-col items-center justify-between p-3'>
-                          <div className='flex-1 flex items-center justify-center text-center'>
-                            <p className={`line-clamp-4 text-xs leading-relaxed transition-colors ${
-                              activeSlideIndex === index ? 'text-white' : 'text-slate-300'
-                            }`}>
-                              {lyr}
-                            </p>
-                          </div>
-
-                          <div className='mt-2 flex w-full items-center justify-between'>
-                            <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                              activeSlideIndex === index
-                                ? 'bg-purple-500/30 text-purple-300'
-                                : 'bg-white/10 text-slate-400'
-                            }`}>
-                              #{index + 1}
-                            </span>
-
-                            {activeSlideIndex === index && (
-                              <motion.div
-                                initial={{ scale: 0 }}
-                                animate={{ scale: 1 }}
-                                transition={{ type: 'spring', stiffness: 300 }}>
-                                <CheckCircle2 className='h-4 w-4 text-purple-400' />
-                              </motion.div>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className='absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 transition-opacity group-hover:opacity-100' />
-                      </motion.div>
-                    ))}
-                  </div>
-                )}
-              </motion.div>
+              <h1 className='text-xl font-bold text-white'>Controle</h1>
+              <p className='text-sm text-slate-400'>Apresentação de letras</p>
             </div>
-          </div>
 
-          {/* Keyboard Shortcuts Info */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.5, delay: 0.6 }}
-            className='mt-6 rounded-xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm'>
-            <p className='text-xs text-slate-400'>
-              <span className='font-semibold text-white'>Atalhos:</span> Use as setas ← → para navegar entre slides na janela de apresentação
-            </p>
-          </motion.div>
+            {/* Theme */}
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className='space-y-3'>
+              <div className='flex items-center gap-2 text-white'>
+                <Palette className='h-4 w-4' />
+                <h3 className='text-sm font-semibold'>Tema</h3>
+              </div>
+              <Select value={selectedThemeId} onValueChange={handleThemeChange}>
+                <SelectTrigger className='border-white/20 bg-white/5 text-white'>
+                  <SelectValue placeholder='Selecionar tema' />
+                </SelectTrigger>
+                <SelectContent className='border-white/20 bg-slate-900'>
+                  {themes.map(theme => (
+                    <SelectItem
+                      key={theme.id}
+                      value={theme.id}
+                      className='text-white hover:bg-white/10'>
+                      {theme.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </motion.div>
+
+            {/* Font Size - Minimalista */}
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+              className='space-y-2'>
+              <div className='flex items-center justify-between'>
+                <div className='flex items-center gap-2 text-white'>
+                  <Type className='h-4 w-4' />
+                  <h3 className='text-sm font-semibold'>Tamanho</h3>
+                </div>
+                <span className='text-sm font-semibold text-purple-400'>{fontSize}px</span>
+              </div>
+              <input
+                type='range'
+                min='24'
+                max='120'
+                value={fontSize}
+                onChange={e => handleFontSizeChange(Number(e.target.value))}
+                className='w-full h-1 accent-purple-500'
+              />
+            </motion.div>
+
+            {/* Background */}
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+              className='space-y-3'>
+              <div className='flex items-center gap-2 text-white'>
+                <Palette className='h-4 w-4' />
+                <h3 className='text-sm font-semibold'>Fundo</h3>
+              </div>
+
+              {/* Background Type Selector */}
+              <Select value={backgroundType} onValueChange={(value: BackgroundType) => setBackgroundType(value)}>
+                <SelectTrigger className='border-white/20 bg-white/5 text-white'>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className='border-white/20 bg-slate-900'>
+                  <SelectItem value='none' className='text-white hover:bg-white/10'>
+                    Nenhum
+                  </SelectItem>
+                  <SelectItem value='color' className='text-white hover:bg-white/10'>
+                    Cor Sólida
+                  </SelectItem>
+                  <SelectItem value='gradient' className='text-white hover:bg-white/10'>
+                    Gradiente
+                  </SelectItem>
+                  <SelectItem value='video' className='text-white hover:bg-white/10'>
+                    Vídeo
+                  </SelectItem>
+                  <SelectItem value='image' className='text-white hover:bg-white/10'>
+                    Imagem
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+
+              {/* Background Options */}
+              <AnimatePresence mode='wait'>
+                {backgroundType === 'color' && (
+                  <motion.div
+                    key='color'
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className='space-y-2'>
+                    <input
+                      type='color'
+                      value={solidColor}
+                      onChange={e => setSolidColor(e.target.value)}
+                      className='w-full h-10 cursor-pointer rounded border border-white/20'
+                    />
+                  </motion.div>
+                )}
+
+                {backgroundType === 'gradient' && (
+                  <motion.div
+                    key='gradient'
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className='space-y-3'>
+                    {/* Gradient Presets */}
+                    <div className='space-y-2'>
+                      <Label className='text-xs text-slate-400'>Presets</Label>
+                      <div className='grid grid-cols-2 gap-2'>
+                        {GRADIENT_PRESETS.map(preset => (
+                          <button
+                            key={preset.name}
+                            onClick={() => {
+                              setGradientStart(preset.start);
+                              setGradientEnd(preset.end);
+                            }}
+                            className='group relative overflow-hidden rounded-lg border border-white/10 p-3 text-left transition-all hover:border-white/30 hover:scale-105'
+                            style={{
+                              background: `linear-gradient(135deg, ${preset.start}, ${preset.end})`,
+                            }}>
+                            <span className='relative z-10 text-xs font-semibold text-white drop-shadow-lg'>
+                              {preset.name}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Custom Colors */}
+                    <div className='flex gap-2'>
+                      <div className='flex-1'>
+                        <Label className='text-xs text-slate-400'>Início</Label>
+                        <input
+                          type='color'
+                          value={gradientStart}
+                          onChange={e => setGradientStart(e.target.value)}
+                          className='w-full h-8 cursor-pointer rounded border border-white/20'
+                        />
+                      </div>
+                      <div className='flex-1'>
+                        <Label className='text-xs text-slate-400'>Fim</Label>
+                        <input
+                          type='color'
+                          value={gradientEnd}
+                          onChange={e => setGradientEnd(e.target.value)}
+                          className='w-full h-8 cursor-pointer rounded border border-white/20'
+                        />
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+
+                {backgroundType === 'video' && (
+                  <motion.div
+                    key='video'
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}>
+                    <Select onValueChange={selectVideoBackground}>
+                      <SelectTrigger className='border-white/20 bg-white/5 text-white text-sm'>
+                        <SelectValue placeholder='Selecionar vídeo' />
+                      </SelectTrigger>
+                      <SelectContent className='border-white/20 bg-slate-900'>
+                        {backgroundVideos.map(video => (
+                          <SelectItem
+                            key={video}
+                            value={`${documentsPath}/${video}`}
+                            className='text-white hover:bg-white/10'>
+                            {video}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </motion.div>
+                )}
+
+                {backgroundType === 'image' && (
+                  <motion.div
+                    key='image'
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className='space-y-2'>
+                    {backgroundImage ? (
+                      <div className='relative'>
+                        <img
+                          src={backgroundImage}
+                          alt='Background preview'
+                          className='w-full h-32 object-cover rounded-lg border border-white/20'
+                        />
+                        <button
+                          onClick={() => setBackgroundImage('')}
+                          className='absolute top-2 right-2 rounded-full bg-red-500/80 p-2 text-white hover:bg-red-600 transition-colors'>
+                          <svg
+                            xmlns='http://www.w3.org/2000/svg'
+                            width='16'
+                            height='16'
+                            viewBox='0 0 24 24'
+                            fill='none'
+                            stroke='currentColor'
+                            strokeWidth='2'
+                            strokeLinecap='round'
+                            strokeLinejoin='round'>
+                            <line x1='18' y1='6' x2='6' y2='18'></line>
+                            <line x1='6' y1='6' x2='18' y2='18'></line>
+                          </svg>
+                        </button>
+                      </div>
+                    ) : (
+                      <label className='flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-white/20 rounded-lg cursor-pointer hover:border-purple-500/50 transition-colors bg-white/5'>
+                        <ImageIcon className='h-8 w-8 text-slate-400' />
+                        <p className='mt-2 text-xs text-slate-400'>Clique para selecionar</p>
+                        <input
+                          type='file'
+                          accept='image/*'
+                          onChange={handleImageUpload}
+                          className='hidden'
+                        />
+                      </label>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.div>
+
+            {/* Logo */}
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+              className='space-y-3'>
+              <div className='flex items-center gap-2 text-white'>
+                <ImageIcon className='h-4 w-4' />
+                <h3 className='text-sm font-semibold'>Logo</h3>
+              </div>
+
+              {logoImage ? (
+                <div className='relative'>
+                  <img
+                    src={logoImage}
+                    alt='Logo preview'
+                    className='w-full h-24 object-contain rounded-lg border border-white/20 bg-white/5 p-2'
+                  />
+                  <button
+                    onClick={() => {
+                      setLogoImage('');
+                      api?.setSetting('customLogo', '');
+                    }}
+                    className='absolute top-2 right-2 rounded-full bg-red-500/80 p-1.5 text-white hover:bg-red-600 transition-colors'>
+                    <svg
+                      xmlns='http://www.w3.org/2000/svg'
+                      width='14'
+                      height='14'
+                      viewBox='0 0 24 24'
+                      fill='none'
+                      stroke='currentColor'
+                      strokeWidth='2'
+                      strokeLinecap='round'
+                      strokeLinejoin='round'>
+                      <line x1='18' y1='6' x2='6' y2='18'></line>
+                      <line x1='6' y1='6' x2='18' y2='18'></line>
+                    </svg>
+                  </button>
+                </div>
+              ) : (
+                <label className='flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-white/20 rounded-lg cursor-pointer hover:border-purple-500/50 transition-colors bg-white/5'>
+                  <ImageIcon className='h-6 w-6 text-slate-400' />
+                  <p className='mt-1 text-xs text-slate-400'>Selecionar logo</p>
+                  <input
+                    type='file'
+                    accept='image/*'
+                    onChange={handleLogoUpload}
+                    className='hidden'
+                  />
+                </label>
+              )}
+            </motion.div>
+          </div>
+        </div>
+
+        {/* Main - Slides Grid */}
+        <div className='flex-1 overflow-hidden'>
+          <div className='h-full p-6'>
+            <div className='mb-4 flex items-center justify-between'>
+              <div className='flex items-center gap-2'>
+                <Play className='h-5 w-5 text-purple-400' />
+                <h2 className='text-lg font-semibold text-white'>
+                  Slides {songLyric.length > 0 && `(${songLyric.length})`}
+                </h2>
+              </div>
+              {activeSlideIndex >= 0 && songLyric.length > 0 && (
+                <div className='text-sm text-slate-400'>
+                  Slide {activeSlideIndex + 1} de {songLyric.length}
+                </div>
+              )}
+            </div>
+
+            {songLyric.length === 0 ? (
+              <div className='flex h-[calc(100%-4rem)] items-center justify-center rounded-2xl border border-white/10 bg-white/5'>
+                <div className='text-center'>
+                  <Play className='mx-auto h-16 w-16 text-slate-600' />
+                  <p className='mt-4 text-slate-400'>Aguardando letras...</p>
+                </div>
+              </div>
+            ) : (
+              <div className='h-[calc(100%-4rem)] overflow-y-auto'>
+                <div className='grid grid-cols-3 gap-4 pb-4'>
+                  {songLyric?.map?.((lyr, index) => (
+                    <motion.div
+                      key={index}
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ duration: 0.2, delay: index * 0.02 }}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => handleSlideClick(index)}
+                      className={`group relative cursor-pointer overflow-hidden rounded-xl border p-4 transition-all ${
+                        activeSlideIndex === index
+                          ? 'border-purple-500 bg-purple-500/10 shadow-lg shadow-purple-500/20'
+                          : 'border-white/10 bg-white/5 hover:border-purple-500/50 hover:bg-white/10'
+                      }`}>
+                      <div className='flex min-h-[140px] flex-col justify-between'>
+                        <div className='mb-3 flex-1'>
+                          <p className='line-clamp-5 text-sm leading-relaxed text-slate-300'>
+                            {lyr}
+                          </p>
+                        </div>
+                        <div className='flex items-center justify-between'>
+                          <span
+                            className={`text-xs font-semibold ${
+                              activeSlideIndex === index ? 'text-purple-400' : 'text-slate-500'
+                            }`}>
+                            #{index + 1}
+                          </span>
+                          {activeSlideIndex === index && (
+                            <ChevronRight className='h-4 w-4 text-purple-400' />
+                          )}
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </Fragment>

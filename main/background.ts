@@ -119,9 +119,14 @@ export async function openLyricsWindow(url, filePath, isDefault = false) {
 
   // Once settings window is ready, resend last lyrics if any queued
   lyricsSettingsWindow.webContents.on('did-finish-load', () => {
-    if (lastLoadedLyrics && !lyricsSettingsWindow.isDestroyed()) {
-      lyricsSettingsWindow.webContents.send('loaded-lyrics', lastLoadedLyrics);
-    }
+    console.log('📊 Settings window loaded, last lyrics count:', lastLoadedLyrics?.length || 0);
+    // Add a small delay to ensure React has mounted
+    setTimeout(() => {
+      if (lastLoadedLyrics && !lyricsSettingsWindow.isDestroyed()) {
+        console.log('📤 Sending lyrics to settings window:', lastLoadedLyrics.length, 'lines');
+        lyricsSettingsWindow.webContents.send('loaded-lyrics', lastLoadedLyrics);
+      }
+    }, 500);
   });
 }
 
@@ -202,9 +207,17 @@ ipcMain.handle('get-lyric-by-url-handle', async (event, { url }) => {
 
   // Cache and send to settings window when available
   lastLoadedLyrics = lyricArray;
-  if (lyricsSettingsWindow && !lyricsSettingsWindow.isDestroyed()) {
-    lyricsSettingsWindow.webContents.send('loaded-lyrics', lyricArray);
-  }
+  console.log('💾 Cached lyrics from URL:', lyricArray.length, 'lines');
+
+  // Wait a bit to ensure settings window is ready
+  setTimeout(() => {
+    if (lyricsSettingsWindow && !lyricsSettingsWindow.isDestroyed()) {
+      console.log('📤 Sending lyrics to settings window (from URL handler)');
+      lyricsSettingsWindow.webContents.send('loaded-lyrics', lyricArray);
+    } else {
+      console.log('⏸️ Settings window not ready, lyrics will be sent when window loads');
+    }
+  }, 1000);
 
   return lyricArray;
 });
@@ -227,9 +240,17 @@ ipcMain.handle('get-lyric-by-file-path', async (event, { filePath, isDefault = f
 
   // Cache and send to settings window
   lastLoadedLyrics = lyricArray;
-  if (lyricsSettingsWindow && !lyricsSettingsWindow.isDestroyed()) {
-    lyricsSettingsWindow.webContents.send('loaded-lyrics', lyricArray);
-  }
+  console.log('💾 Cached lyrics from file:', lyricArray.length, 'lines');
+
+  // Wait a bit to ensure settings window is ready
+  setTimeout(() => {
+    if (lyricsSettingsWindow && !lyricsSettingsWindow.isDestroyed()) {
+      console.log('📤 Sending lyrics to settings window (from file handler)');
+      lyricsSettingsWindow.webContents.send('loaded-lyrics', lyricArray);
+    } else {
+      console.log('⏸️ Settings window not ready, lyrics will be sent when window loads');
+    }
+  }, 1000);
 
   return lyricArray;
 });
@@ -267,6 +288,10 @@ ipcMain.handle('get-video-base64', async (_event, { videoPath }) => {
   }
 });
 
+ipcMain.handle('smart-lyrics-search', async (_event, { userQuery }) => {
+  return lyrics.smartLyricsSearch(userQuery);
+});
+
 ipcMain.handle('get-setting', async (_event, key) => {
   return settings.get(key);
 });
@@ -279,6 +304,13 @@ ipcMain.on('select-video-background', (event, { windowId, video }) => {
   const targetWindow = BrowserWindow.fromId(windowId);
   if (targetWindow && !targetWindow.isDestroyed()) {
     targetWindow.webContents.send('selected-video-background', video);
+  }
+});
+
+ipcMain.on('set-custom-background', (event, { windowId, background }) => {
+  const targetWindow = BrowserWindow.fromId(windowId);
+  if (targetWindow && !targetWindow.isDestroyed()) {
+    targetWindow.webContents.send('custom-background', background);
   }
 });
 

@@ -19,15 +19,19 @@ function LyricsDisplayPage() {
   const [currentTheme, setCurrentTheme] = useState<Theme | null>(null);
   const [showPagination, setShowPagination] = useState(true);
   const [showLogo, setShowLogo] = useState(true);
+  const [customBackground, setCustomBackground] = useState<string>('');
+  const [customLogo, setCustomLogo] = useState<string>('');
 
   // Load settings
   useEffect(() => {
     const loadSettings = async () => {
       const showPaginationSetting = await api?.getSetting('showPagination');
       const showLogoSetting = await api?.getSetting('showLogo');
+      const customLogoSetting = await api?.getSetting('customLogo');
 
       if (showPaginationSetting !== undefined) setShowPagination(showPaginationSetting);
       if (showLogoSetting !== undefined) setShowLogo(showLogoSetting);
+      if (customLogoSetting) setCustomLogo(customLogoSetting);
     };
     loadSettings();
   }, []);
@@ -69,7 +73,20 @@ function LyricsDisplayPage() {
 
     api?.onSlideClicked(slideIndex => setActiveIndex(slideIndex));
     api?.onSlideClickedIndex(slideIndex => setActiveIndex(slideIndex));
-    api?.onSelectedVideoBackground(video => setVideoBackgroundPath(video));
+    api?.onSelectedVideoBackground(video => {
+      setVideoBackgroundPath(video);
+      if (video) {
+        setCustomBackground(''); // Clear custom background when video is selected
+      }
+    });
+
+    // Listen for custom background (colors/gradients)
+    api?.onCustomBackground?.(background => {
+      setCustomBackground(background);
+      if (background) {
+        setVideoBackgroundPath(''); // Clear video when custom background is set
+      }
+    });
 
     // Listen for theme updates from settings window
     api?.onThemeUpdate?.(themeData => {
@@ -172,7 +189,7 @@ function LyricsDisplayPage() {
 
       <div className='relative h-screen w-screen overflow-hidden bg-black'>
         {/* Background Video */}
-        {videoSrcBlog && (
+        {videoSrcBlog && !customBackground && (
           <video
             src={videoSrcBlog}
             autoPlay
@@ -182,8 +199,16 @@ function LyricsDisplayPage() {
           />
         )}
 
-        {/* Gradient Overlay (when no video) */}
-        {!videoSrcBlog && (
+        {/* Custom Background (color/gradient) */}
+        {customBackground && (
+          <div
+            className='absolute left-0 top-0 h-full w-full'
+            style={{ background: customBackground }}
+          />
+        )}
+
+        {/* Default Gradient (when no background) */}
+        {!videoSrcBlog && !customBackground && (
           <div className='absolute left-0 top-0 h-full w-full bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900' />
         )}
 
@@ -202,14 +227,37 @@ function LyricsDisplayPage() {
                 </motion.div>
               )}
             </AnimatePresence>
+          </div>
+        </div>
 
-            {/* Progress Indicator */}
-            {songLyric.length > 0 && showPagination && (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.5 }}
-                className='mt-12 flex items-center justify-center gap-2'>
+        {/* Bottom Bar - Progress Indicator & Next Line Preview */}
+        {songLyric.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5 }}
+            className='absolute bottom-0 left-0 right-0 z-20 bg-black/30 backdrop-blur-sm'>
+            {/* Next Line Preview */}
+            {activeIndex < songLyric.length - 1 && (
+              <div className='px-8 py-6'>
+                <AnimatePresence mode='wait'>
+                  <motion.p
+                    key={`preview-${activeIndex}`}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.4, ease: 'easeInOut' }}
+                    className='text-center text-3xl text-white/60'
+                    style={{ fontFamily: textStyle.fontFamily }}>
+                    {songLyric[activeIndex + 1]}
+                  </motion.p>
+                </AnimatePresence>
+              </div>
+            )}
+
+            {/* Progress Dots */}
+            {showPagination && (
+              <div className='flex items-center justify-center gap-2 px-8 py-4'>
                 {songLyric.map((_, index) => (
                   <motion.div
                     key={index}
@@ -219,15 +267,14 @@ function LyricsDisplayPage() {
                     className={`h-2 rounded-full transition-all ${
                       index === activeIndex
                         ? 'w-12 bg-gradient-to-r from-purple-500 to-pink-500'
-                        : 'w-2 bg-white/30'
+                        : 'w-2 bg-white/40'
                     }`}
                   />
                 ))}
-              </motion.div>
+              </div>
             )}
-
-          </div>
-        </div>
+          </motion.div>
+        )}
 
         {/* Loading Overlay */}
         {isLoading && (
@@ -251,7 +298,11 @@ function LyricsDisplayPage() {
             transition={{ delay: 1 }}
             className='absolute bottom-8 right-8 z-20'>
             <div className='rounded-2xl border border-white/10 bg-black/30 p-4 backdrop-blur-sm'>
-              <Music2 className='h-12 w-12 text-white/70' />
+              {customLogo ? (
+                <img src={customLogo} alt='Logo' className='h-12 w-12 object-contain' />
+              ) : (
+                <Music2 className='h-12 w-12 text-white/70' />
+              )}
             </div>
           </motion.div>
         )}

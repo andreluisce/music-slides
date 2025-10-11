@@ -78,6 +78,12 @@ const createWindow = (
 
   win = new BrowserWindow(browserOptions);
 
+  // Open DevTools if enabled via environment variable
+  if (process.env.OPEN_DEVTOOLS === 'true') {
+    win.webContents.once('did-finish-load', () => {
+      win.webContents.openDevTools();
+    });
+  }
 
   win.on('close', saveState);
 
