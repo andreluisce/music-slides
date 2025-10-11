@@ -28,7 +28,8 @@
     "sanitize-filename": "^1.6.3",
     "string-similarity": "^4.0.4",
     "superagent": "^8.0.9",
-    "tailwindcss": "^4.1.14"
+    "tailwindcss": "^4.1.14",
+    "tailwindcss-animate": "^1.0.7"
   },
   "devDependencies": {
     "@types/node": "^18.11.18",
