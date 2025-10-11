@@ -1,18 +1,25 @@
 import React, { useEffect, useState } from 'react';
 import Head from 'next/head';
 import { motion } from 'framer-motion';
-import { Search, Music2, Plus, Filter } from 'lucide-react';
+import { Search, Music2, Plus, Filter, Edit, Trash2, Heart, Play } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
-import { getAllSongs } from '../lib/supabase-service';
+import { getAllSongs, deleteSong } from '../lib/supabase-service';
+import { toggleFavorite, isFavorite } from '../lib/presentations-service';
+import type { Song } from '../lib/supabase';
+import SongModal from '../components/SongModal';
 
 export default function Library() {
-  const [songs, setSongs] = useState([]);
+  const [songs, setSongs] = useState<Song[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingSong, setEditingSong] = useState<Song | null>(null);
+  const [favorites, setFavorites] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     loadSongs();
+    loadFavorites();
   }, []);
 
   const loadSongs = async () => {
@@ -25,6 +32,59 @@ export default function Library() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const loadFavorites = async () => {
+    // Load favorite status for all songs
+    // For now, we'll check as needed
+  };
+
+  const handleToggleFavorite = async (songId: string) => {
+    try {
+      await toggleFavorite('song', songId);
+      const isFav = await isFavorite('song', songId);
+      setFavorites((prev) => {
+        const newFavs = new Set(prev);
+        if (isFav) {
+          newFavs.add(songId);
+        } else {
+          newFavs.delete(songId);
+        }
+        return newFavs;
+      });
+    } catch (error) {
+      console.error('Error toggling favorite:', error);
+    }
+  };
+
+  const handleDeleteSong = async (songId: string) => {
+    if (!confirm('Deseja realmente deletar esta música?')) return;
+
+    try {
+      await deleteSong(songId);
+      loadSongs();
+    } catch (error) {
+      console.error('Error deleting song:', error);
+    }
+  };
+
+  const handleEditSong = (song: Song) => {
+    setEditingSong(song);
+    setIsModalOpen(true);
+  };
+
+  const handleNewSong = () => {
+    setEditingSong(null);
+    setIsModalOpen(true);
+  };
+
+  const handleModalClose = () => {
+    setIsModalOpen(false);
+    setEditingSong(null);
+  };
+
+  const handleModalSave = () => {
+    loadSongs();
   };
 
   const filteredSongs = songs.filter(
@@ -58,13 +118,11 @@ export default function Library() {
               className='border-white/20 bg-white/10 pl-10 text-white placeholder:text-slate-400'
             />
           </div>
-          <Button className='bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700'>
+          <Button
+            onClick={handleNewSong}
+            className='bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700'>
             <Plus className='mr-2 h-4 w-4' />
             Nova Música
-          </Button>
-          <Button variant='outline' className='border-white/20 bg-white/5 text-white hover:bg-white/10'>
-            <Filter className='mr-2 h-4 w-4' />
-            Filtros
           </Button>
         </div>
 
@@ -88,7 +146,7 @@ export default function Library() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3, delay: index * 0.05 }}
-                className='group cursor-pointer rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-white/10 p-4 transition-all hover:scale-105 hover:border-purple-500/50 hover:from-purple-500/10 hover:to-pink-500/10 hover:shadow-lg hover:shadow-purple-500/20'>
+                className='group rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-white/10 p-4 transition-all hover:border-purple-500/50 hover:from-purple-500/10 hover:to-pink-500/10 hover:shadow-lg hover:shadow-purple-500/20'>
                 <div className='flex items-start gap-3'>
                   <div className='flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-purple-500/30 to-pink-500/30'>
                     <Music2 className='h-6 w-6 text-purple-300' />
@@ -99,10 +157,44 @@ export default function Library() {
                     <p className='mt-2 text-xs text-slate-500'>{song.lyrics?.length || 0} linhas</p>
                   </div>
                 </div>
+                <div className='mt-3 flex gap-2'>
+                  <Button
+                    onClick={() => handleToggleFavorite(song.id)}
+                    size='sm'
+                    variant='outline'
+                    className={`flex-1 border-white/20 ${
+                      favorites.has(song.id)
+                        ? 'bg-pink-500/20 text-pink-400 hover:bg-pink-500/30'
+                        : 'bg-white/5 text-white hover:bg-white/10'
+                    }`}>
+                    <Heart className={`h-4 w-4 ${favorites.has(song.id) ? 'fill-current' : ''}`} />
+                  </Button>
+                  <Button
+                    onClick={() => handleEditSong(song)}
+                    size='sm'
+                    variant='outline'
+                    className='flex-1 border-white/20 bg-white/5 text-white hover:bg-white/10'>
+                    <Edit className='h-4 w-4' />
+                  </Button>
+                  <Button
+                    onClick={() => handleDeleteSong(song.id)}
+                    size='sm'
+                    variant='outline'
+                    className='border-red-500/20 bg-red-500/5 text-red-400 hover:bg-red-500/10'>
+                    <Trash2 className='h-4 w-4' />
+                  </Button>
+                </div>
               </motion.div>
             ))}
           </div>
         )}
+
+        <SongModal
+          isOpen={isModalOpen}
+          onClose={handleModalClose}
+          onSave={handleModalSave}
+          song={editingSong}
+        />
       </div>
     </div>
   );
