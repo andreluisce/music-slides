@@ -10,11 +10,21 @@ import axios from 'axios';
 export const findByAnyParameter = async searchTerm => {
   try {
     const url = `${EXCERPT_URL}${API_KEY}&q=${encodeURIComponent(searchTerm)}`;
-    const { data } = await axios(url);
+    console.log('🌐 Vagalume API URL:', url);
 
-    return data?.response?.docs || [];
+    const { data } = await axios(url);
+    console.log('📥 Vagalume API response:', JSON.stringify(data, null, 2));
+
+    const results = data?.response?.docs || [];
+    console.log('✅ Vagalume parsed results:', results.length, 'songs');
+
+    return results;
   } catch (error) {
-    console.error('Vagalume findByAnyParameter error:', error);
+    console.error('❌ Vagalume findByAnyParameter error:', error.message);
+    if (error.response) {
+      console.error('Response status:', error.response.status);
+      console.error('Response data:', error.response.data);
+    }
     return [];
   }
 };

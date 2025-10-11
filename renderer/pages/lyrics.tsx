@@ -262,7 +262,7 @@ function LyricsDisplayPage() {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.5 }}
-          className='absolute bottom-8 left-8 z-20'>
+          className='absolute bottom-8 right-8 z-20'>
           <motion.div
             initial={{ opacity: 1 }}
             animate={{ opacity: 0 }}

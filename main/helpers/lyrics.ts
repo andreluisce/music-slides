@@ -2,10 +2,17 @@ import * as vagalume from './lyrics-providers/vagalume.provider';
 import * as genius from './lyrics-providers/genius.provider';
 
 export const findByAnyParameter = async (searchTerm: string) => {
+  console.log('🔍 Searching for:', searchTerm);
+
   let results = await vagalume.findByAnyParameter(searchTerm);
+  console.log('📊 Vagalume results:', results?.length || 0, 'songs');
+
   if (!results || results.length === 0) {
+    console.log('🔄 Trying Genius API as fallback...');
     results = await genius.findByAnyParameter(searchTerm);
+    console.log('📊 Genius results:', results?.length || 0, 'songs');
   }
+
   return results || [];
 };
 
