@@ -53,20 +53,37 @@ export const smartLyricsSearch = async (userQuery: string) => {
 export const formatLyrics = async (lyrics: string) => {
   try {
     const formattedLyrics = await getGeminiResponse({
-      prompt: `Format and clean the following lyrics:
-      - Fix capitalization, punctuation
-      - Detect verse/chorus/bridge structure
-      - Remove duplicate lines
-      - Split into optimal slide lengths (around 4-6 lines per slide)
+      prompt: `Format and clean the following lyrics for a presentation slide show:
+      - Fix capitalization, punctuation, and common typos.
+      - Detect and clearly mark sections like [Verse 1], [Chorus], [Bridge], [Outro].
+      - Remove any duplicate lines or sections.
+      - Split the lyrics into optimal slide lengths, aiming for 2-4 meaningful lines per slide.
+      - Ensure each slide break is logical and doesn't cut a phrase mid-sentence.
+      - Return only the formatted lyrics, with each slide content separated by a unique delimiter like "---SLIDE_BREAK---".
       
       Lyrics: """${lyrics}"""
       
-      Return only the formatted lyrics, no extra text.`
+      Example of desired output format:
+      [Verse 1]
+      Line 1
+      Line 2
+      ---SLIDE_BREAK---
+      Line 3
+      Line 4
+      ---SLIDE_BREAK---
+      [Chorus]
+      Chorus Line 1
+      Chorus Line 2
+      ---SLIDE_BREAK---
+      Chorus Line 3
+      Chorus Line 4
+      
+      Return only the formatted lyrics, nothing else.`
     });
-    return formattedLyrics.split('\n').filter(Boolean);
+    return formattedLyrics.split('---SLIDE_BREAK---').map(s => s.trim()).filter(Boolean);
   } catch (error) {
     console.error('Error formatting lyrics:', error);
-    return lyrics.split('\n').filter(Boolean);
+    return lyrics.split('\n').map(s => s.trim()).filter(Boolean);
   }
 };
 
