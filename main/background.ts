@@ -1,8 +1,9 @@
-import { app, BrowserWindow, ipcMain, screen } from 'electron';
+import { app, BrowserWindow, ipcMain, screen, globalShortcut } from 'electron';
 import serve from 'electron-serve';
 import { createWindow } from './helpers';
 import * as lyrics from './helpers/lyrics';
 import * as bible from './helpers/bible';
+import { createQuickScreen, showQuickScreen, hideQuickScreen } from './helpers/quick-screen';
 import sanitize from 'sanitize-filename';
 import fse from 'fs-extra';
 import createTouchBarLyrics from './helpers/create-touchbar-items';
@@ -36,6 +37,16 @@ if (isProd) {
     // mainWindow.webContents.openDevTools();
     await mainWindow.loadURL(`http://localhost:${port}/`);
   }
+
+  createQuickScreen();
+
+  globalShortcut.register('CommandOrControl+Shift+L', () => {
+    if (quickScreenWindow.isVisible()) {
+      hideQuickScreen();
+    } else {
+      showQuickScreen();
+    }
+  });
 
   mainWindow.on('closed', () => {
     if (lyricsSettingsWindow && !lyricsSettingsWindow.isDestroyed()) {
