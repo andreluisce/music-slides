@@ -1,4 +1,3 @@
-/** @jsxImportSource theme-ui */
 import React, { SVGProps } from 'react';
 
 export const LogoSvg = (props: SVGProps<SVGSVGElement>) => (

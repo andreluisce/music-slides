@@ -125,7 +125,7 @@ export async function openLyricsWindow(url, filePath, isDefault = false) {
   });
 }
 
-ipcMain.handle('open-lyrics-window', (event, { url, filePath, isDefault = false }) => {
+ipcMain.on('open-lyrics-window', (event, { url, filePath, isDefault = false }) => {
   openLyricsWindow(url, filePath, isDefault);
 });
 
@@ -253,8 +253,18 @@ ipcMain.handle('get-background-videos', async () => {
   return files;
 });
 
-ipcMain.handle('get-bible-verse', async (_event, { book, chapter, verse }) => {
-  return bible.getVerse(book, chapter, verse);
+ipcMain.handle('get-bible-verse', async (_event, { book, chapter, verse, version }) => {
+  return bible.getVerse(book, chapter, verse, version);
+});
+
+ipcMain.handle('get-video-base64', async (_event, { videoPath }) => {
+  try {
+    const videoBuffer = await fse.readFile(videoPath);
+    return `data:video/mp4;base64,${videoBuffer.toString('base64')}`;
+  } catch (error) {
+    console.error('Error reading video file:', error);
+    return null;
+  }
 });
 
 ipcMain.handle('get-setting', async (_event, key) => {
@@ -263,6 +273,27 @@ ipcMain.handle('get-setting', async (_event, key) => {
 
 ipcMain.handle('set-setting', async (_event, { key, value }) => {
   return settings.set(key, value);
+});
+
+ipcMain.on('select-video-background', (event, { windowId, video }) => {
+  const targetWindow = BrowserWindow.fromId(windowId);
+  if (targetWindow && !targetWindow.isDestroyed()) {
+    targetWindow.webContents.send('selected-video-background', video);
+  }
+});
+
+ipcMain.on('set-active-slide', (event, { windowId, index }) => {
+  const targetWindow = BrowserWindow.fromId(windowId);
+  if (targetWindow && !targetWindow.isDestroyed()) {
+    targetWindow.webContents.send('slide-clicked-index', index);
+  }
+});
+
+ipcMain.on('update-lyrics-theme', (event, { windowId, themeData }) => {
+  const targetWindow = BrowserWindow.fromId(windowId);
+  if (targetWindow && !targetWindow.isDestroyed()) {
+    targetWindow.webContents.send('theme-update', themeData);
+  }
 });
 
 app.on('window-all-closed', () => {

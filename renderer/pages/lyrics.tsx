@@ -2,7 +2,9 @@ import React, { Fragment, useEffect, useState } from 'react';
 import Head from 'next/head';
 import queryString from 'query-string';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Music2 } from 'lucide-react';
+import { getAllThemes } from '../lib/supabase-service';
+import type { Theme } from '../lib/supabase';
 
 import { LogoSvg } from '../shared/Icons/Logo';
 
@@ -14,6 +16,35 @@ function LyricsDisplayPage() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [videoBackgroundPath, setVideoBackgroundPath] = useState('');
   const [videoSrcBlog, setVideoSrcBlog] = useState('');
+  const [currentTheme, setCurrentTheme] = useState<Theme | null>(null);
+  const [showPagination, setShowPagination] = useState(true);
+  const [showLogo, setShowLogo] = useState(true);
+
+  // Load settings
+  useEffect(() => {
+    const loadSettings = async () => {
+      const showPaginationSetting = await api?.getSetting('showPagination');
+      const showLogoSetting = await api?.getSetting('showLogo');
+
+      if (showPaginationSetting !== undefined) setShowPagination(showPaginationSetting);
+      if (showLogoSetting !== undefined) setShowLogo(showLogoSetting);
+    };
+    loadSettings();
+  }, []);
+
+  // Load default theme
+  useEffect(() => {
+    const loadTheme = async () => {
+      try {
+        const themes = await getAllThemes();
+        const defaultTheme = themes.find(t => t.is_default) || themes[0];
+        setCurrentTheme(defaultTheme);
+      } catch (error) {
+        console.error('Error loading theme:', error);
+      }
+    };
+    loadTheme();
+  }, []);
 
   useEffect(() => {
     if (!songLyric.length) {
@@ -40,13 +71,31 @@ function LyricsDisplayPage() {
     api?.onSlideClickedIndex(slideIndex => setActiveIndex(slideIndex));
     api?.onSelectedVideoBackground(video => setVideoBackgroundPath(video));
 
+    // Listen for theme updates from settings window
+    api?.onThemeUpdate?.(themeData => {
+      setCurrentTheme({
+        ...currentTheme,
+        font_family: themeData.fontFamily,
+        font_size: themeData.fontSize,
+        font_weight: themeData.fontWeight,
+        text_color: themeData.textColor,
+        text_shadow: themeData.textShadow,
+        animation_type: themeData.animationType,
+      } as Theme);
+    });
+
     const handleKeyDown = event => {
       if (event.keyCode === 37) {
+        // Left arrow
         setActiveIndex(prevIndex => (prevIndex === 0 ? 0 : prevIndex - 1));
       } else if (event.keyCode === 39) {
+        // Right arrow
         setActiveIndex(prevIndex =>
           prevIndex === songLyric.length - 1 ? prevIndex : prevIndex + 1
         );
+      } else if (event.keyCode === 27) {
+        // ESC key - could close window or go to first slide
+        setActiveIndex(0);
       }
     };
 
@@ -57,13 +106,63 @@ function LyricsDisplayPage() {
   }, [songLyric.length]);
 
   useEffect(() => {
-    if (videoBackgroundPath) {
-      // Use direct file:// path to avoid loading video into memory
-      setVideoSrcBlog(`file://${videoBackgroundPath}`);
-    } else {
-      setVideoSrcBlog('');
-    }
+    const loadVideo = async () => {
+      if (videoBackgroundPath) {
+        const base64Video = await api?.getVideoBase64(videoBackgroundPath);
+        setVideoSrcBlog(base64Video);
+      } else {
+        setVideoSrcBlog('');
+      }
+    };
+    loadVideo();
   }, [videoBackgroundPath]);
+
+  // Get animation variant based on theme
+  const getAnimationVariant = (animationType: string) => {
+    switch (animationType) {
+      case 'slide':
+        return {
+          initial: { opacity: 0, x: 100 },
+          animate: { opacity: 1, x: 0 },
+          exit: { opacity: 0, x: -100 },
+        };
+      case 'zoom':
+        return {
+          initial: { opacity: 0, scale: 0.5 },
+          animate: { opacity: 1, scale: 1 },
+          exit: { opacity: 0, scale: 0.5 },
+        };
+      case 'fade':
+      default:
+        return {
+          initial: { opacity: 0 },
+          animate: { opacity: 1 },
+          exit: { opacity: 0 },
+        };
+    }
+  };
+
+  const textStyle: React.CSSProperties = currentTheme
+    ? {
+        fontFamily: currentTheme.font_family,
+        fontSize: `${currentTheme.font_size}px`,
+        fontWeight: currentTheme.font_weight,
+        color: currentTheme.text_color,
+        textShadow: currentTheme.text_shadow,
+        WebkitTextStroke:
+          currentTheme.text_outline !== 'none' ? currentTheme.text_outline : undefined,
+      }
+    : {
+        fontFamily: 'Montserrat, sans-serif',
+        fontSize: '72px',
+        fontWeight: 700,
+        color: '#FFFFFF',
+        textShadow: '2px 2px 8px rgba(0, 0, 0, 0.9)',
+      };
+
+  const animation = currentTheme
+    ? getAnimationVariant(currentTheme.animation_type)
+    : getAnimationVariant('fade');
 
   return (
     <Fragment>
@@ -71,37 +170,111 @@ function LyricsDisplayPage() {
         <title>Lyrics Slideshow - Lyrics</title>
       </Head>
 
-      <div className='relative h-screen w-screen overflow-hidden'>
-        <video src={videoSrcBlog} autoPlay loop muted className='absolute top-0 left-0 h-full w-full object-cover' />
-        <div className='relative z-10 flex h-full w-full items-center justify-center'>
-          <div className='text-center text-white'>
-            <AnimatePresence>
-              {songLyric?.map?.((lyr, index) => (
-                <motion.p
-                  key={index}
-                  initial={{ opacity: 0 }}
-                  animate={{
-                    opacity: index === activeIndex ? 1 : 0.5,
-                    y: (index - activeIndex) * 100,
-                    scale: index === activeIndex ? 1.2 : 1,
-                  }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.5 }}
-                  className='absolute'>
-                  {lyr}
-                </motion.p>
-              ))}
+      <div className='relative h-screen w-screen overflow-hidden bg-black'>
+        {/* Background Video */}
+        {videoSrcBlog && (
+          <video
+            src={videoSrcBlog}
+            autoPlay
+            loop
+            muted
+            className='absolute left-0 top-0 h-full w-full object-cover'
+          />
+        )}
+
+        {/* Gradient Overlay (when no video) */}
+        {!videoSrcBlog && (
+          <div className='absolute left-0 top-0 h-full w-full bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900' />
+        )}
+
+        {/* Content */}
+        <div className='relative z-10 flex h-full w-full items-center justify-center px-16'>
+          <div className='w-full text-center'>
+            <AnimatePresence mode='wait'>
+              {songLyric.length > 0 && (
+                <motion.div
+                  key={activeIndex}
+                  {...animation}
+                  transition={{ duration: 0.6, ease: 'easeInOut' }}
+                  style={textStyle}
+                  className='mx-auto max-w-6xl leading-tight'>
+                  {songLyric[activeIndex]}
+                </motion.div>
+              )}
             </AnimatePresence>
+
+            {/* Progress Indicator */}
+            {songLyric.length > 0 && showPagination && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.5 }}
+                className='mt-12 flex items-center justify-center gap-2'>
+                {songLyric.map((_, index) => (
+                  <motion.div
+                    key={index}
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ delay: index * 0.05 }}
+                    className={`h-2 rounded-full transition-all ${
+                      index === activeIndex
+                        ? 'w-12 bg-gradient-to-r from-purple-500 to-pink-500'
+                        : 'w-2 bg-white/30'
+                    }`}
+                  />
+                ))}
+              </motion.div>
+            )}
+
           </div>
         </div>
-        {isLoading ? (
-          <div className='absolute top-0 left-0 flex h-full w-full items-center justify-center bg-black bg-opacity-50'>
-            <Loader2 className='h-32 w-32 animate-spin text-white' />
-          </div>
-        ) : null}
-        <div className='absolute bottom-4 right-4 z-20'>
-          <LogoSvg className='h-24 w-24' />
-        </div>
+
+        {/* Loading Overlay */}
+        {isLoading && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className='absolute left-0 top-0 z-20 flex h-full w-full items-center justify-center bg-black/80 backdrop-blur-sm'>
+            <div className='text-center'>
+              <Loader2 className='mx-auto h-20 w-20 animate-spin text-purple-500' />
+              <p className='mt-4 text-xl text-white'>Carregando letras...</p>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Logo */}
+        {showLogo && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.5 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 1 }}
+            className='absolute bottom-8 right-8 z-20'>
+            <div className='rounded-2xl border border-white/10 bg-black/30 p-4 backdrop-blur-sm'>
+              <Music2 className='h-12 w-12 text-white/70' />
+            </div>
+          </motion.div>
+        )}
+
+        {/* Keyboard Shortcuts Hint (fades out after 5 seconds) */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.5 }}
+          className='absolute bottom-8 left-8 z-20'>
+          <motion.div
+            initial={{ opacity: 1 }}
+            animate={{ opacity: 0 }}
+            transition={{ delay: 5, duration: 1 }}
+            className='rounded-xl border border-white/10 bg-black/50 px-4 py-3 backdrop-blur-sm'>
+            <p className='text-sm text-white/70'>
+              Use <span className='font-semibold text-white'>← →</span> para navegar
+              {' • '}
+              <span className='font-semibold text-white'>ESC</span> para voltar ao início
+            </p>
+          </motion.div>
+        </motion.div>
       </div>
     </Fragment>
   );
