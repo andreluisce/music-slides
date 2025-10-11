@@ -1,7 +1,7 @@
 import React, { Fragment, useEffect, useState } from 'react';
 import Head from 'next/head';
 import queryString from 'query-string';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from 'components/ui/select';
 
 const api = typeof window !== 'undefined' ? window.api : undefined;
 

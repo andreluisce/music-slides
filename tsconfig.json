@@ -20,8 +20,8 @@
     "jsx": "preserve",
     "baseUrl": ".",
     "paths": {
-      "@/components/*": ["renderer/components/*"],
-      "@/lib/utils": ["renderer/lib/utils"]
+      "components/*": ["renderer/components/*"],
+      "lib/utils": ["renderer/lib/utils"]
     }
   },
   "exclude": [

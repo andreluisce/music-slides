@@ -12,9 +12,9 @@ function kebabToCapitalizeText(str) {
     .join(' ');
 }
 
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { Button } from 'components/ui/button';
+import { Input } from 'components/ui/input';
+import { Label } from 'components/ui/label';
 
 function SearchForm({ isSearching, setFoundRemoteSongs, setIsSearching }) {
   const [artist, setArtist] = useState('');
@@ -77,7 +77,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table';
+} from 'components/ui/table';
 
 function SongListTable({ filteredLocalSongs, foundRemoteSongs, isSearching }) {
   const [allSongs, setAllSongs] = useState([]);
