@@ -209,6 +209,8 @@ function SongListTable({ filteredLocalSongs, foundRemoteSongs, supabaseSongs, is
 
 import { Loader2, Music, Search, RefreshCw, Play, Music2 } from 'lucide-react';
 
+import { BibleVerseSearch } from '../components/BibleVerseSearch';
+
 function Home() {
   const [foundRemoteSongs, setFoundRemoteSongs] = useState([]);
   const [supabaseSongs, setSupabaseSongs] = useState([]);
@@ -336,6 +338,8 @@ function Home() {
 
         {/* Songs List */}
         <SongListTable {...{ filteredLocalSongs, foundRemoteSongs, supabaseSongs, isSearching }} />
+
+        <BibleVerseSearch />
       </div>
     </div>
   );

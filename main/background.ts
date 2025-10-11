@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain, screen } from 'electron';
 import serve from 'electron-serve';
 import { createWindow } from './helpers';
 import * as lyrics from './helpers/lyrics';
+import * as bible from './helpers/bible';
 import sanitize from 'sanitize-filename';
 import fse from 'fs-extra';
 import createTouchBarLyrics from './helpers/create-touchbar-items';
@@ -238,6 +239,10 @@ ipcMain.handle('getBackgroundVideos', async () => {
   await fse.ensureDir(videosPath);
   const files = await fse.readdir(videosPath);
   return files;
+});
+
+ipcMain.handle('get-bible-verse', async (_event, book, chapter, verse) => {
+  return bible.getVerse(book, chapter, verse);
 });
 
 app.on('window-all-closed', () => {
