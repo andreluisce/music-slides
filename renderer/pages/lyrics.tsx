@@ -81,8 +81,9 @@ function LyricsDisplayPage() {
                   key={index}
                   initial={{ opacity: 0 }}
                   animate={{
-                    opacity: index === activeIndex ? 1 : 0,
-                    display: index === activeIndex ? 'block' : 'none',
+                    opacity: index === activeIndex ? 1 : 0.5,
+                    y: (index - activeIndex) * 100,
+                    scale: index === activeIndex ? 1.2 : 1,
                   }}
                   exit={{ opacity: 0 }}
                   transition={{ duration: 0.5 }}
