@@ -185,3 +185,25 @@ export const suggestThemeColors = async (lyrics: string) => {
     return ['#000000', '#FFFFFF']; // Default colors
   }
 };
+
+export const suggestBibleVerses = async (lyrics: string) => {
+  try {
+    const bibleVerses = await getGeminiResponse({
+      prompt: `Analyze the themes and messages in the following song lyrics and suggest 3-5 relevant Bible verses. For each verse, provide the book, chapter, and verse number. Return a JSON array of objects, where each object has 'book', 'chapter', and 'verse' properties.
+      
+      Lyrics: """${lyrics}"""
+      
+      Example of desired output format:
+      [
+        { "book": "John", "chapter": 3, "verse": 16 },
+        { "book": "Psalm", "chapter": 23, "verse": 1 }
+      ]
+      
+      Return JSON array only.`
+    });
+    return JSON.parse(bibleVerses);
+  } catch (error) {
+    console.error('Error suggesting Bible verses:', error);
+    return [];
+  }
+};

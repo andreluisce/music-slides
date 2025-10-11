@@ -530,6 +530,109 @@ function LyricsDisplaySettingsPage() {
                 </label>
               )}
             </motion.div>
+
+            {/* AI Bible Verse Suggestions */}
+            {songLyric.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4 }}
+                className='space-y-3'>
+                <div className='flex items-center gap-2 text-white'>
+                  <BookOpen className='h-4 w-4' />
+                  <h3 className='text-sm font-semibold'>Sugestões Bíblicas AI</h3>
+                </div>
+                <Button
+                  onClick={async () => {
+                    const verses = await api?.suggestBibleVerses(songLyric.join('\n'));
+                    if (verses && verses.length > 0) {
+                      // Here you would typically add these verses to the presentation
+                      console.log('Suggested Bible Verses:', verses);
+                      alert('Versículos sugeridos (veja no console):
+' + JSON.stringify(verses, null, 2));
+                    }
+                  }}
+                  className='w-full bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600'>
+                  <Sparkles className='mr-2 h-4 w-4' />
+                  Sugerir Versículos
+                </Button>
+              </motion.div>
+            )}
+          </div>
+        </div>
+
+        {/* Main - Slides Grid */}
+        <div className='flex-1 overflow-hidden'>
+          <div className='h-full p-6'>
+            <div className='mb-4 flex items-center justify-between'>
+              <div className='flex items-center gap-2'>
+                <Play className='h-5 w-5 text-purple-400' />
+                <h2 className='text-lg font-semibold text-white'>
+                  Slides {songLyric.length > 0 && `(${songLyric.length})`}
+                </h2>
+              </div>
+              {activeSlideIndex >= 0 && songLyric.length > 0 && (
+                <div className='text-sm text-slate-400'>
+                  Slide {activeSlideIndex + 1} de {songLyric.length}
+                </div>
+              )}
+            </div>
+
+            {songLyric.length === 0 ? (
+              <div className='flex h-[calc(100%-4rem)] items-center justify-center rounded-2xl border border-white/10 bg-white/5'>
+                <div className='text-center'>
+                  <Play className='mx-auto h-16 w-16 text-slate-600' />
+                  <p className='mt-4 text-slate-400'>Aguardando letras...</p>
+                </div>
+              </div>
+            ) : (
+              <div className='h-[calc(100%-4rem)] overflow-y-auto'>
+                <div className='grid grid-cols-3 gap-4 pb-4'>
+                  {songLyric?.map?.((lyr, index) => (
+                    <motion.div
+                      key={index}
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ duration: 0.2, delay: index * 0.02 }}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => handleSlideClick(index)}
+                      className={`group relative cursor-pointer overflow-hidden rounded-xl border p-4 transition-all ${
+                        activeSlideIndex === index
+                          ? 'border-purple-500 bg-purple-500/10 shadow-lg shadow-purple-500/20'
+                          : 'border-white/10 bg-white/5 hover:border-purple-500/50 hover:bg-white/10'
+                      }`}>
+                      <div className='flex min-h-[140px] flex-col justify-between'>
+                        <div className='mb-3 flex-1'>
+                          <p className='line-clamp-5 text-sm leading-relaxed text-slate-300'>
+                            {lyr}
+                          </p>
+                        </div>
+                        <div className='flex items-center justify-between'>
+                          <span
+                            className={`text-xs font-semibold ${
+                              activeSlideIndex === index ? 'text-purple-400' : 'text-slate-500'
+                            }`}>
+                            #{index + 1}
+                          </span>
+                          {activeSlideIndex === index && (
+                            <ChevronRight className='h-4 w-4 text-purple-400' />
+                          )}
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </Fragment>
+  );
+}
+
+export default LyricsDisplaySettingsPage;
           </div>
         </div>
 

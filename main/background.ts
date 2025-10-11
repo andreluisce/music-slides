@@ -296,6 +296,10 @@ ipcMain.handle('suggest-theme-colors', async (_event, { lyrics }) => {
   return lyrics.suggestThemeColors(lyrics);
 });
 
+ipcMain.handle('suggest-bible-verses', async (_event, { lyrics }) => {
+  return lyrics.suggestBibleVerses(lyrics);
+});
+
 ipcMain.handle('get-setting', async (_event, key) => {
   return settings.get(key);
 });

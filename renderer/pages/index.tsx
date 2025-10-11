@@ -328,7 +328,7 @@ function Home() {
         </motion.div>
 
         {/* Songs List */}
-        {/* <SongListTable {...{ filteredLocalSongs, foundRemoteSongs, supabaseSongs, isSearching }} /> */}
+        <SongListTable {...{ filteredLocalSongs, foundRemoteSongs, supabaseSongs, isSearching }} />
       </div>
     </div>
   );
