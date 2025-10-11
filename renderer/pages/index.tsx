@@ -26,15 +26,22 @@ function SearchForm({ isSearching, setFoundRemoteSongs, setIsSearching }) {
     event.preventDefault();
     setFoundRemoteSongs([]);
     setIsSearching(true);
-    const result = await api?.findLyrics(
-      SearchType.ByAnyParameter,
-      `${artist}`.trim(),
-      `${title}`.trim()
-    );
+    try {
+      const result = await api?.findLyrics(
+        SearchType.ByAnyParameter,
+        `${artist}`.trim(),
+        `${title}`.trim()
+      );
 
-    setIsSearching(false);
+      setIsSearching(false);
 
-    setFoundRemoteSongs(songs => [...songs, ...result]);
+      if (result && Array.isArray(result)) {
+        setFoundRemoteSongs(songs => [...songs, ...result]);
+      }
+    } catch (error) {
+      console.error('Error searching lyrics:', error);
+      setIsSearching(false);
+    }
   };
 
   return (

@@ -6,7 +6,7 @@ export const findByAnyParameter = async (searchTerm: string) => {
   if (!results || results.length === 0) {
     results = await genius.findByAnyParameter(searchTerm);
   }
-  return results;
+  return results || [];
 };
 
 export const searchByTitleAndArtistExact = async ({ artist, title }: { artist: string; title: string }) => {
@@ -14,7 +14,7 @@ export const searchByTitleAndArtistExact = async ({ artist, title }: { artist: s
   if (!result || !result.lyrics) {
     result = await genius.searchByTitleAndArtistExact({ artist, title });
   }
-  return result;
+  return result || { artist, title, lyrics: '' };
 };
 
 export const searchByTitleAndArtist = async ({ artist, title }: { artist: string; title: string }) => {
@@ -22,5 +22,5 @@ export const searchByTitleAndArtist = async ({ artist, title }: { artist: string
   if (!results || results.length === 0) {
     results = await genius.searchByTitleAndArtist({ artist, title });
   }
-  return results;
+  return results || [];
 };

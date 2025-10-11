@@ -14,7 +14,8 @@ export const findByAnyParameter = async searchTerm => {
 
     return data?.response?.docs || [];
   } catch (error) {
-    // ignore
+    console.error('Vagalume findByAnyParameter error:', error);
+    return [];
   }
 };
 
@@ -37,6 +38,7 @@ export const searchByTitleAndArtist = async ({ artist, title }) => {
 
     return data?.response?.docs || [];
   } catch (error) {
-    // ignore
+    console.error('Vagalume searchByTitleAndArtist error:', error);
+    return [];
   }
 };

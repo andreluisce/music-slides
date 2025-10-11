@@ -34,10 +34,10 @@ export const searchByTitleAndArtistExact = async ({ artist, title }: { artist: s
       return { artist, title, lyrics };
     }
 
-    return null;
+    return { artist, title, lyrics: '' };
   } catch (error) {
     console.error(error);
-    return null;
+    return { artist, title, lyrics: '' };
   }
 };
 

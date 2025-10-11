@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain, screen, globalShortcut } from 'electron';
 import serve from 'electron-serve';
+import settings from 'electron-settings';
 import { createWindow } from './helpers';
 import * as lyrics from './helpers/lyrics';
 import * as bible from './helpers/bible';
@@ -124,15 +125,15 @@ export async function openLyricsWindow(url, filePath, isDefault = false) {
   });
 }
 
-ipcMain.handle('openLyricsWindow', (event, { url, filePath, isDefault = false }) => {
+ipcMain.handle('open-lyrics-window', (event, { url, filePath, isDefault = false }) => {
   openLyricsWindow(url, filePath, isDefault);
 });
 
-ipcMain.handle('getPath', (event, { name }) => {
+ipcMain.handle('get-path', (event, { name }) => {
   return app.getPath(name);
 });
 
-ipcMain.handle('getAllLocalSongs', async () => {
+ipcMain.handle('get-all-local-songs', async () => {
   const documentsPath = app.getPath('documents');
   const baseDir = `${documentsPath}/lyrics-slide-show`;
   const songsDir = `${baseDir}/songs`;
@@ -148,7 +149,7 @@ ipcMain.handle('getAllLocalSongs', async () => {
     .sort();
 });
 
-ipcMain.handle('getDefaultSlides', async () => {
+ipcMain.handle('get-default-slides', async () => {
   const documentsPath = app.getPath('documents');
   const defaultSlidesDir = `${documentsPath}/lyrics-slide-show/default-slides`;
 
@@ -158,7 +159,7 @@ ipcMain.handle('getDefaultSlides', async () => {
   return files.map(item => (item.includes('.txt') ? item : undefined)).filter(Boolean);
 });
 
-ipcMain.handle('findLyrics', async (_event, { searchType, artist, title }) => {
+ipcMain.handle('find-lyrics', async (_event, { searchType, artist, title }) => {
   switch (searchType) {
     case SearchType.ByAnyParameter:
       return lyrics.findByAnyParameter(`${artist} ${title}`);
@@ -169,7 +170,7 @@ ipcMain.handle('findLyrics', async (_event, { searchType, artist, title }) => {
   }
 });
 
-ipcMain.handle('getLyricByUrlHandle', async (event, { url }) => {
+ipcMain.handle('get-lyric-by-url-handle', async (event, { url }) => {
   const regex = /^\/(.+?)\/(.+?)\.html$/;
 
   const [, artist, title] = url.match(regex);
@@ -208,7 +209,7 @@ ipcMain.handle('getLyricByUrlHandle', async (event, { url }) => {
   return lyricArray;
 });
 
-ipcMain.handle('getLyricByFilePath', async (event, { filePath, isDefault = false }) => {
+ipcMain.handle('get-lyric-by-file-path', async (event, { filePath, isDefault = false }) => {
   const documentsPath = app.getPath('documents');
 
   const lyric = await fse.readFile(
@@ -244,7 +245,7 @@ ipcMain.on('focus-target-window', (event, { windowId }) => {
   }
 });
 
-ipcMain.handle('getBackgroundVideos', async () => {
+ipcMain.handle('get-background-videos', async () => {
   const documentsPath = app.getPath('documents');
   const videosPath = `${documentsPath}/lyrics-slide-show/videos`;
   await fse.ensureDir(videosPath);
@@ -254,6 +255,14 @@ ipcMain.handle('getBackgroundVideos', async () => {
 
 ipcMain.handle('get-bible-verse', async (_event, { book, chapter, verse }) => {
   return bible.getVerse(book, chapter, verse);
+});
+
+ipcMain.handle('get-setting', async (_event, key) => {
+  return settings.get(key);
+});
+
+ipcMain.handle('set-setting', async (_event, { key, value }) => {
+  return settings.set(key, value);
 });
 
 app.on('window-all-closed', () => {

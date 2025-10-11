@@ -1,5 +1,5 @@
 import { BrowserWindow } from 'electron';
-import { createWindow } from './create-window';
+import createWindow from './create-window';
 
 let quickScreenWindow: BrowserWindow;
 
