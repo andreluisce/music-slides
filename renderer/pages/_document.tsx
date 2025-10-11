@@ -7,6 +7,15 @@ class MyDocument extends Document {
       <Html lang='en'>
         <Head>
           <meta charSet='utf-8' />
+          <script
+            dangerouslySetInnerHTML={{
+              __html: `
+                if (typeof global === 'undefined') {
+                  window.global = window;
+                }
+              `,
+            }}
+          />
         </Head>
         <body>
           <Main />

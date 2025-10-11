@@ -3,6 +3,10 @@ import type { AppProps } from 'next/app';
 import Head from 'next/head';
 import '../styles/globals.css';
 
+// Polyfill global for Electron
+if (typeof window !== 'undefined' && !(window as any).global) {
+  (window as any).global = window;
+}
 
 function MyApp({ Component, pageProps }: AppProps) {
   return (
