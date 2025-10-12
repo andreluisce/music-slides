@@ -83,53 +83,49 @@ export async function searchByTitleAndArtist({
       return null;
     }
 
-    // Wait for lyrics container - try multiple selectors
-    let hasLyrics = await waitForSelector(page, '.cifra_lyric', 3000);
-    if (!hasLyrics) {
-      hasLyrics = await waitForSelector(page, '.lyric', 3000);
-    }
-    if (!hasLyrics) {
-      hasLyrics = await waitForSelector(page, '.letra', 3000);
-    }
-    if (!hasLyrics) {
-      hasLyrics = await waitForSelector(page, '[class*="letra"]', 3000);
-    }
-    if (!hasLyrics) {
-      hasLyrics = await waitForSelector(page, 'pre', 3000);
-    }
+    // Extract lyrics immediately - page is already loaded, no need to wait!
+    console.log('📝 Extracting lyrics (fast)...');
 
-    if (!hasLyrics) {
-      console.log('❌ Lyrics container not found');
-      return null;
-    }
+    const lyricsSelectors = ['.cifra_lyric', '.lyric', '.letra', '[class*="letra"]', 'pre'];
+    let rawLyrics = null;
 
-    // Try multiple selectors for lyrics
-    let rawLyrics =
-      (await safeInnerText(page, '.cifra_lyric')) ||
-      (await safeInnerText(page, '.lyric')) ||
-      (await safeInnerText(page, '.letra')) ||
-      (await safeInnerText(page, '[class*="letra"]')) ||
-      (await safeInnerText(page, 'pre'));
+    for (const selector of lyricsSelectors) {
+      const text = await safeInnerText(page, selector);
+      if (text && text.length > 10) {
+        rawLyrics = text;
+        console.log(`✅ Found lyrics using selector: ${selector}`);
+        break;
+      }
+    }
 
     if (!rawLyrics || rawLyrics.length < 10) {
       console.log('❌ Lyrics text is too short or empty');
       return null;
     }
 
-    // Extract title and artist from the page - try multiple selectors
-    const pageTitle =
-      (await safeInnerText(page, 'h1.t1')) ||
-      (await safeInnerText(page, '.page-title')) ||
-      (await safeInnerText(page, 'h1')) ||
-      (await safeInnerText(page, '[class*="title"]'));
+    // Extract title and artist in parallel (fast!)
+    console.log('🔍 Extracting title and artist...');
 
-    const pageArtist =
-      (await safeInnerText(page, 'h2.t2 a')) ||
-      (await safeInnerText(page, '.page-subtitle a')) ||
-      (await safeInnerText(page, 'h2 a')) ||
-      (await safeInnerText(page, '[class*="artist"] a')) ||
-      (await safeInnerText(page, '.artist-name')) ||
-      (await safeInnerText(page, '.artist'));
+    const [pageTitle, pageArtist] = await Promise.all([
+      // Title selectors
+      (async () => {
+        const titleSelectors = ['h1.t1', '.page-title', 'h1', '[class*="title"]'];
+        for (const sel of titleSelectors) {
+          const text = await safeInnerText(page, sel);
+          if (text) return text;
+        }
+        return null;
+      })(),
+      // Artist selectors
+      (async () => {
+        const artistSelectors = ['h2.t2 a', '.page-subtitle a', 'h2 a', '[class*="artist"] a', '.artist-name', '.artist'];
+        for (const sel of artistSelectors) {
+          const text = await safeInnerText(page, sel);
+          if (text) return text;
+        }
+        return null;
+      })()
+    ]);
 
     // Try to extract artist from URL if page selectors failed
     let extractedArtist = pageArtist || artist;
@@ -177,9 +173,18 @@ export async function findByAnyParameter(searchTerm: string): Promise<any[]> {
       return [];
     }
 
-    const hasResults = await waitForSelector(page, '.list--songs li, .gs-result', 10000);
+    // Try multiple selectors quickly - don't wait 10 seconds!
+    console.log('🔍 Looking for search results (fast check)...');
+
+    let hasResults = await waitForSelector(page, '.list--songs li', 2000); // Reduced from 10s to 2s
     if (!hasResults) {
-      return [];
+      console.log('❌ List view not found, trying grid/Google search...');
+      hasResults = await waitForSelector(page, '.gs-result', 2000); // Try alternative selector
+      if (!hasResults) {
+        console.log('❌ No search results found on CifraClub');
+        return [];
+      }
+      console.log('✅ Using grid/Google search results');
     }
 
     // Get all search results

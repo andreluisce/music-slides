@@ -126,9 +126,22 @@ export async function openLyricsWindow(url, filePath, isDefault = false) {
     }
   });
 
-  const additionalQueryString = url
-    ? `?url=${encodeURIComponent(url)}`
-    : `?filePath=${encodeURIComponent(filePath)}&isDefault=${isDefault}`;
+  // Validate inputs and build query string
+  let additionalQueryString = '';
+  
+  if (url && typeof url === 'string' && url.trim().length > 0) {
+    additionalQueryString = `?url=${encodeURIComponent(url)}`;
+    console.log('🔗 Opening lyrics with URL:', url);
+  } else if (filePath && typeof filePath === 'string' && filePath.trim().length > 0) {
+    additionalQueryString = `?filePath=${encodeURIComponent(filePath)}&isDefault=${isDefault}`;
+    console.log('📂 Opening lyrics with file path:', filePath, 'isDefault:', isDefault);
+  } else {
+    console.warn('⚠️ openLyricsWindow: No valid URL or filePath provided');
+    console.warn('   url:', url, '(type:', typeof url, ')');
+    console.warn('   filePath:', filePath, '(type:', typeof filePath, ')');
+    // Fall back to empty lyrics page
+    additionalQueryString = '?empty=true';
+  }
 
   if (isProd) {
     await lyricsWindow.loadURL(`app://./lyrics.html${additionalQueryString}`);
@@ -296,7 +309,8 @@ ipcMain.handle('get-default-slides', async () => {
   await fse.ensureDir(defaultSlidesDir);
 
   const files = await fse.readdir(defaultSlidesDir);
-  return files.map(item => (item.includes('.txt') ? item : undefined)).filter(Boolean);
+  // Only return JSON files since we don't use .txt anymore
+  return files.filter(item => item.endsWith('.json'));
 });
 
 ipcMain.handle('find-lyrics', async (_event, { searchType, artist, title }) => {
@@ -311,83 +325,153 @@ ipcMain.handle('find-lyrics', async (_event, { searchType, artist, title }) => {
 });
 
 ipcMain.handle('get-lyric-by-url-handle', async (event, { url }) => {
-  const regex = /^\/(.+?)\/(.+?)\.html$/;
-
-  const [, artist, title] = url.match(regex);
-
-  const response = await lyrics.searchByTitleAndArtistExact({ artist, title });
-
-  const { getAnalyzedSlides } = await import('./helpers/song-analyzer');
-  const lyricArray = await getAnalyzedSlides(artist, title, response.lyrics);
-
-  const { saveSong, songExists } = await import('./helpers/file-system');
-  if (!(await songExists(artist, title))) {
-    await saveSong(artist, title, response.lyrics);
-  }
-
-  if (lyricsWindow && !lyricsWindow.isDestroyed()) {
-    lyricsWindow.setTouchBar(createTouchBarLyrics(lyricsWindow, lyricArray.map(l => l.text)));
-    lyricsWindow.focus();
-  }
-
-  // Cache and send to settings window when available
-  lastLoadedLyrics = lyricArray;
-  console.log('💾 Cached lyrics from URL:', lyricArray.length, 'lines');
-
-  // Wait a bit to ensure settings window is ready
-  setTimeout(() => {
-    if (lyricsSettingsWindow && !lyricsSettingsWindow.isDestroyed()) {
-      console.log('📤 Sending lyrics to settings window (from URL handler)');
-      lyricsSettingsWindow.webContents.send('loaded-lyrics', lyricArray);
+  try {
+    console.log('📥 Processing URL:', url);
+    
+    // Handle different URL formats
+    let artist = '';
+    let title = '';
+    
+    // Try regex for internal paths like "/artist/song.html"
+    const internalRegex = /^\/(.+?)\/(.+?)(?:\.html)?$/;
+    const internalMatch = url.match(internalRegex);
+    
+    if (internalMatch) {
+      artist = internalMatch[1].replace(/-/g, ' ');
+      title = internalMatch[2].replace(/-/g, ' ').replace(/\.html$/, '');
+      console.log('📋 Parsed from internal URL - Artist:', artist, 'Title:', title);
     } else {
-      console.log('⏸️ Settings window not ready, lyrics will be sent when window loads');
+      // Handle full URLs like "https://www.letras.mus.br/diante-do-trono/1923221/"
+      const fullUrlRegex = /\/([^\/]+)\/([^\/]+)\/?$/;
+      const fullMatch = url.match(fullUrlRegex);
+      
+      if (fullMatch) {
+        artist = fullMatch[1].replace(/-/g, ' ');
+        title = fullMatch[2].replace(/-/g, ' ');
+        console.log('📋 Parsed from full URL - Artist:', artist, 'Title:', title);
+      } else {
+        throw new Error(`Invalid URL format: ${url}`);
+      }
     }
-  }, 1000);
+    
+    if (!artist || !title) {
+      throw new Error(`Could not extract artist and title from URL: ${url}`);
+    }
 
-  return lyricArray;
+    const response = await lyrics.searchByTitleAndArtistExact({ artist, title });
+    
+    if (!response || !response.lyrics) {
+      throw new Error(`No lyrics found for ${artist} - ${title}`);
+    }
+
+    const { getAnalyzedSlides } = await import('./helpers/song-analyzer');
+    const lyricArray = await getAnalyzedSlides(artist, title, response.lyrics);
+    
+    if (!lyricArray || !Array.isArray(lyricArray)) {
+      throw new Error('Failed to analyze lyrics - no slides generated');
+    }
+
+    const { saveSong, songExists } = await import('./helpers/file-system');
+    if (!(await songExists(artist, title))) {
+      await saveSong(artist, title, response.lyrics);
+    }
+
+    if (lyricsWindow && !lyricsWindow.isDestroyed()) {
+      lyricsWindow.setTouchBar(createTouchBarLyrics(lyricsWindow, lyricArray.map(l => l.text)));
+      lyricsWindow.focus();
+    }
+
+    // Cache and send to settings window when available
+    lastLoadedLyrics = lyricArray;
+    console.log('💾 Cached lyrics from URL:', lyricArray.length, 'lines');
+
+    // Wait a bit to ensure settings window is ready
+    setTimeout(() => {
+      if (lyricsSettingsWindow && !lyricsSettingsWindow.isDestroyed()) {
+        console.log('📤 Sending lyrics to settings window (from URL handler)');
+        lyricsSettingsWindow.webContents.send('loaded-lyrics', lyricArray);
+      } else {
+        console.log('⏸️ Settings window not ready, lyrics will be sent when window loads');
+      }
+    }, 1000);
+
+    return lyricArray;
+  } catch (error) {
+    console.error('❌ Error in get-lyric-by-url-handle:', error.message);
+    console.error('📋 URL:', url);
+    throw error; // Re-throw to send proper error to renderer
+  }
 });
 
 ipcMain.handle('get-lyric-by-file-path', async (event, { filePath, isDefault = false }) => {
-  const documentsPath = app.getPath('documents');
-
-  const fullPath = `${documentsPath}/lyrics-slide-show/${isDefault ? 'default-slides' : 'songs'}/${filePath}`;
-  const fileContent = await fse.readFile(fullPath, { encoding: 'utf8' });
-
-  console.log('Reading file:', fullPath);
-
-  const { parseSongFileContent, parseFrontmatterFileContent } = await import('./helpers/file-system');
-  let lyricsData;
-
-  if (filePath.endsWith('.json')) {
-    lyricsData = parseSongFileContent(fileContent);
-  } else {
-    lyricsData = parseFrontmatterFileContent(fileContent);
-  }
-
-  const { lyrics: rawLyrics, metadata } = lyricsData;
-
-  const { getAnalyzedSlides } = await import('./helpers/song-analyzer');
-  const lyricArray = await getAnalyzedSlides(metadata.artist, metadata.title, rawLyrics);
-
-  if (lyricsWindow && !lyricsWindow.isDestroyed()) {
-    lyricsWindow.setTouchBar(createTouchBarLyrics(lyricsWindow, lyricArray.map(l => l.text)));
-  }
-
-  // Cache and send to settings window
-  lastLoadedLyrics = lyricArray;
-  console.log('💾 Cached lyrics from file:', lyricArray.length, 'lines');
-
-  // Wait a bit to ensure settings window is ready
-  setTimeout(() => {
-    if (lyricsSettingsWindow && !lyricsSettingsWindow.isDestroyed()) {
-      console.log('📤 Sending lyrics to settings window (from file handler)');
-      lyricsSettingsWindow.webContents.send('loaded-lyrics', lyricArray);
-    } else {
-      console.log('⏸️ Settings window not ready, lyrics will be sent when window loads');
+  try {
+    console.log('📝 Processing file path:', filePath);
+    
+    // Validate filePath
+    if (!filePath || filePath === 'null' || filePath === 'undefined') {
+      throw new Error(`Invalid file path: ${filePath}`);
     }
-  }, 1000);
+    
+    const documentsPath = app.getPath('documents');
+    const fullPath = `${documentsPath}/lyrics-slide-show/${isDefault ? 'default-slides' : 'songs'}/${filePath}`;
+    
+    console.log('📂 Full path:', fullPath);
+    
+    // Check if file exists
+    if (!(await fse.pathExists(fullPath))) {
+      throw new Error(`File does not exist: ${fullPath}`);
+    }
+    
+    const fileContent = await fse.readFile(fullPath, { encoding: 'utf8' });
 
-  return lyricArray;
+    console.log('📄 Reading file:', fullPath);
+
+    const { parseSongFileContent } = await import('./helpers/file-system');
+    // Always parse as JSON with metadata (no .txt files anymore)
+    const lyricsData = parseSongFileContent(fileContent);
+
+    const { lyrics: rawLyrics, metadata } = lyricsData;
+    
+    if (!rawLyrics || !metadata) {
+      throw new Error('Invalid file format - missing lyrics or metadata');
+    }
+    
+    if (!metadata.artist || !metadata.title) {
+      throw new Error('Invalid metadata - missing artist or title');
+    }
+
+    const { getAnalyzedSlides } = await import('./helpers/song-analyzer');
+    const lyricArray = await getAnalyzedSlides(metadata.artist, metadata.title, rawLyrics);
+    
+    if (!lyricArray || !Array.isArray(lyricArray)) {
+      throw new Error('Failed to analyze lyrics - no slides generated');
+    }
+
+    if (lyricsWindow && !lyricsWindow.isDestroyed()) {
+      lyricsWindow.setTouchBar(createTouchBarLyrics(lyricsWindow, lyricArray.map(l => l.text)));
+    }
+
+    // Cache and send to settings window
+    lastLoadedLyrics = lyricArray;
+    console.log('💾 Cached lyrics from file:', lyricArray.length, 'lines');
+
+    // Wait a bit to ensure settings window is ready
+    setTimeout(() => {
+      if (lyricsSettingsWindow && !lyricsSettingsWindow.isDestroyed()) {
+        console.log('📤 Sending lyrics to settings window (from file handler)');
+        lyricsSettingsWindow.webContents.send('loaded-lyrics', lyricArray);
+      } else {
+        console.log('⏸️ Settings window not ready, lyrics will be sent when window loads');
+      }
+    }, 1000);
+
+    return lyricArray;
+  } catch (error) {
+    console.error('❌ Error in get-lyric-by-file-path:', error.message);
+    console.error('📂 File path:', filePath);
+    console.error('🔄 Is default:', isDefault);
+    throw error; // Re-throw to send proper error to renderer
+  }
 });
 
 // Listen for the 'focus-target-window' message from the renderer process
@@ -637,6 +721,57 @@ ipcMain.handle('read-song', async (_event, { artist, title }) => {
     console.error('❌ Error reading song:', error);
     await logError('Error reading song', error);
     return { success: false, error: error.message };
+  }
+});
+
+// Advanced Metadata Handlers
+ipcMain.handle('get-advanced-song-analysis', async (_event, { artist, title, estimatedDuration }) => {
+  console.log('🧠 Get advanced song analysis request:', `${artist} - ${title}`);
+  const { getAdvancedSongAnalysis } = await import('./helpers/song-analyzer');
+  
+  try {
+    // First, get the lyrics
+    const { readSong } = await import('./helpers/file-system');
+    const songData = await readSong(artist, title);
+    
+    if (!songData?.lyrics) {
+      throw new Error('Song not found or has no lyrics');
+    }
+    
+    const analysis = await getAdvancedSongAnalysis(artist, title, songData.lyrics, estimatedDuration);
+    return analysis;
+  } catch (error) {
+    console.error('❌ Error getting advanced song analysis:', error);
+    await logError('Error getting advanced song analysis', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('update-song-analysis', async (_event, { artist, title, analysis }) => {
+  console.log('💾 Update song analysis request:', `${artist} - ${title}`);
+  const { updateSongAnalysis } = await import('./helpers/song-analyzer');
+  
+  try {
+    await updateSongAnalysis(artist, title, analysis);
+    return { success: true };
+  } catch (error) {
+    console.error('❌ Error updating song analysis:', error);
+    await logError('Error updating song analysis', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('generate-advanced-metadata', async (_event, { artist, title, lyrics, estimatedDuration }) => {
+  console.log('🤖 Generate advanced metadata request:', `${artist} - ${title}`);
+  const { generateAdvancedMetadata } = await import('./helpers/advanced-lyrics-analyzer');
+  
+  try {
+    const analysis = await generateAdvancedMetadata(artist, title, lyrics, estimatedDuration);
+    return analysis;
+  } catch (error) {
+    console.error('❌ Error generating advanced metadata:', error);
+    await logError('Error generating advanced metadata', error);
+    throw error;
   }
 });
 

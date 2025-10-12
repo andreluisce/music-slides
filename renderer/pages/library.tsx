@@ -1,9 +1,8 @@
-import React, { Fragment, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { motion } from 'framer-motion';
-import { getAllSongs } from '../lib/supabase-service';
-import { Loader2, Music, Music2, RefreshCw, Plus, Edit, Trash2, ChevronDown, ChevronRight, Folder } from 'lucide-react';
+import { Music, RefreshCw, Plus, Edit, Trash2, ChevronDown, ChevronRight, Settings } from 'lucide-react';
 import { Button } from '../components/ui/button';
 
 const api = typeof window !== 'undefined' ? window.api : undefined;
@@ -12,12 +11,29 @@ function ArtistFolder({ artist, songs, isExpanded, onToggle, onRefresh }) {
   const router = useRouter();
 
   const openLyricsWindow = (url, filePath) => {
+    console.log('🎵 Library: Opening lyrics window - url:', url, 'filePath:', filePath);
+    
+    // Validate inputs before calling API
+    const validUrl = url && typeof url === 'string' && url.trim().length > 0;
+    const validFilePath = filePath && typeof filePath === 'string' && filePath.trim().length > 0;
+    
+    if (!validUrl && !validFilePath) {
+      console.warn('⚠️ Library: Cannot open lyrics - no valid URL or filePath provided');
+      alert('Erro: Não foi possível abrir a música. Caminho do arquivo inválido.');
+      return;
+    }
+    
     api?.openLyricsWindow(url, filePath);
   };
 
   const handleEdit = (song) => {
     // Navigate to edit page with query params
     router.push(`/create-song?artist=${encodeURIComponent(artist)}&title=${encodeURIComponent(song.title)}&edit=true`);
+  };
+
+  const handleEditMetadata = (song) => {
+    // Navigate to metadata editor
+    router.push(`/edit-metadata?artist=${encodeURIComponent(artist)}&title=${encodeURIComponent(song.title)}`);
   };
 
   const handleDelete = async (song) => {
@@ -91,22 +107,31 @@ function ArtistFolder({ artist, songs, isExpanded, onToggle, onRefresh }) {
                   </span>
                 </div>
                 {/* CRUD Buttons */}
-                <div className='mt-1.5 flex gap-1.5 opacity-0 transition-opacity group-hover:opacity-100'>
+                <div className='mt-1.5 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100'>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       handleEdit(song);
                     }}
-                    className='flex flex-1 items-center justify-center gap-1 rounded-md bg-blue-500/20 px-2 py-1 text-xs text-blue-300 transition-colors hover:bg-blue-500/30'>
+                    className='flex flex-1 items-center justify-center gap-1 rounded-md bg-blue-500/20 px-1.5 py-0.5 text-[10px] text-blue-300 transition-colors hover:bg-blue-500/30'>
                     <Edit className='h-3 w-3' />
                     Editar
                   </button>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
+                      handleEditMetadata(song);
+                    }}
+                    className='flex flex-1 items-center justify-center gap-1 rounded-md bg-purple-500/20 px-1.5 py-0.5 text-[10px] text-purple-300 transition-colors hover:bg-purple-500/30'>
+                    <Settings className='h-3 w-3' />
+                    Metadados
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
                       handleDelete(song);
                     }}
-                    className='flex flex-1 items-center justify-center gap-1 rounded-md bg-red-500/20 px-2 py-1 text-xs text-red-300 transition-colors hover:bg-red-500/30'>
+                    className='flex flex-1 items-center justify-center gap-1 rounded-md bg-red-500/20 px-1.5 py-0.5 text-[10px] text-red-300 transition-colors hover:bg-red-500/30'>
                     <Trash2 className='h-3 w-3' />
                     Deletar
                   </button>
@@ -124,8 +149,6 @@ function Library() {
   const router = useRouter();
   const [artistGroups, setArtistGroups] = useState([]);
   const [expandedArtists, setExpandedArtists] = useState({});
-  const [supabaseSongs, setSupabaseSongs] = useState([]);
-  const [isSearching, setIsSearching] = useState(false);
 
   const getAllLocalSongs = () =>
     api?.getAllLocalSongs()?.then(groups => {
@@ -138,15 +161,6 @@ function Library() {
       setExpandedArtists(expanded);
     });
 
-  const loadSupabaseSongs = async () => {
-    try {
-      const songs = await getAllSongs();
-      setSupabaseSongs(songs);
-      console.log('✅ Supabase songs loaded:', songs.length);
-    } catch (error) {
-      console.error('❌ Error loading Supabase songs:', error);
-    }
-  };
 
   const toggleArtist = (artist) => {
     setExpandedArtists(prev => ({
@@ -159,7 +173,6 @@ function Library() {
 
   useEffect(() => {
     getAllLocalSongs();
-    loadSupabaseSongs();
   }, []);
 
   return (
@@ -221,14 +234,6 @@ function Library() {
             )}
           </div>
 
-          {isSearching && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className='flex items-center justify-center py-8'>
-              <Loader2 className='h-8 w-8 animate-spin text-purple-500' />
-            </motion.div>
-          )}
         </motion.div>
       </div>
     </div>

@@ -27,8 +27,23 @@ declare global {
       updateSong: (artist: string, title: string, lyrics: string, metadata?: any) => Promise<{ success: boolean; filePath?: string; error?: string }>;
       deleteSong: (artist: string, title: string) => Promise<{ success: boolean; error?: string }>;
       readSong: (artist: string, title: string) => Promise<{ success: boolean; lyrics?: string; metadata?: any; error?: string }>;
+      getAdvancedSongAnalysis: (artist: string, title: string) => Promise<any>;
+      updateSongAnalysis: (artist: string, title: string, analysis: any) => Promise<void>;
       // AI features
       advancedLyricsSearch: (userQuery: string) => Promise<{
+        title: string;
+        artist: string;
+        lyrics: string;
+        source: string;
+        metadata?: any;
+      } | null>;
+      fastLyricsSearch: (query: string) => Promise<Array<{
+        title: string;
+        artist: string;
+        url: string;
+        source: string;
+      }>>;
+      fetchLyricsByUrl: (url: string, source: string) => Promise<{
         title: string;
         artist: string;
         lyrics: string;

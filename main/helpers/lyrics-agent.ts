@@ -3,6 +3,7 @@ import * as cifraclub from './lyrics-providers/cifraclub.provider';
 import { saveSong, readSong, songExists, createSongFileContent } from './file-system';
 import { uploadSongToSupabase, downloadSongFromSupabase } from './supabase-sync';
 import { interpretLyricsQuery } from './ai-service';
+import { createClient } from '@supabase/supabase-js';
 
 export interface LyricsSearchResult {
   lyrics: string;
@@ -333,6 +334,124 @@ async function saveEverywhere(result: LyricsSearchResult): Promise<void> {
 }
 
 /**
+ * Search for songs in Supabase database cache
+ */
+async function searchInDatabaseCache(query: string): Promise<SongSearchResult[]> {
+  try {
+    const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+    const supabaseKey = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+    
+    if (!supabaseUrl || !supabaseKey) {
+      console.log('⚠️  Skipping database cache - Supabase credentials not configured');
+      return [];
+    }
+    
+    const supabase = createClient(supabaseUrl, supabaseKey);
+    
+    // Search by title, artist, and search_terms
+    const { data, error } = await supabase
+      .from('songs')
+      .select('title, artist, metadata')
+      .or(`title.ilike.%${query}%,artist.ilike.%${query}%,search_terms.ilike.%${query}%`)
+      .limit(10);
+    
+    if (error) {
+      console.error('❌ Error searching database cache:', error);
+      return [];
+    }
+    
+    if (!data || data.length === 0) {
+      return [];
+    }
+    
+    return data.map(song => ({
+      title: song.title,
+      artist: song.artist,
+      url: song.metadata?.url || `#cached-${song.title.toLowerCase().replace(/\s+/g, '-')}`,
+      source: (song.metadata?.source || 'database-cache') as 'letrasmusic' | 'cifraclub',
+    }));
+  } catch (error) {
+    console.error('❌ Error in database cache search:', error.message);
+    return [];
+  }
+}
+
+/**
+ * Save song to Supabase database (songs table) for enhanced search capabilities
+ */
+async function saveSongToDatabase(result: LyricsSearchResult): Promise<void> {
+  try {
+    // Get Supabase client
+    const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+    const supabaseKey = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+    
+    if (!supabaseUrl || !supabaseKey) {
+      console.log('⚠️  Skipping database save - Supabase credentials not configured');
+      return;
+    }
+    
+    const supabase = createClient(supabaseUrl, supabaseKey);
+    
+    console.log('📦 Saving to Supabase database (songs table)...');
+    
+    // Check if song already exists
+    const { data: existing } = await supabase
+      .from('songs')
+      .select('id')
+      .ilike('artist', result.artist)
+      .ilike('title', result.title)
+      .single();
+    
+    const songData = {
+      title: result.title,
+      artist: result.artist,
+      lyrics: result.lyrics,
+      // Map metadata to database columns
+      album: result.metadata?.album || null,
+      year: result.metadata?.year || null,
+      genre: result.metadata?.genre || 'Gospel',
+      language: result.metadata?.language || 'pt-BR',
+      // Store full metadata as JSON (including source)
+      metadata: {
+        ...result.metadata,
+        source: result.metadata?.source || result.source,
+      },
+      // Additional searchable fields (now using dedicated columns)
+      search_terms: result.metadata?.searchTerms || `${result.artist} ${result.title}`.toLowerCase(),
+      provider: result.metadata?.provider || result.source,
+      cache_version: result.metadata?.cacheVersion || '1.0',
+    };
+    
+    if (existing) {
+      // Update existing record
+      const { error } = await supabase
+        .from('songs')
+        .update({ ...songData, updated_at: new Date().toISOString() })
+        .eq('id', existing.id);
+      
+      if (error) {
+        console.error('❌ Error updating song in database:', error);
+      } else {
+        console.log('✅ Song updated in database');
+      }
+    } else {
+      // Create new record
+      const { error } = await supabase
+        .from('songs')
+        .insert([songData]);
+      
+      if (error) {
+        console.error('❌ Error inserting song into database:', error);
+      } else {
+        console.log('✅ Song inserted into database');
+      }
+    }
+  } catch (error) {
+    console.error('❌ Error saving to Supabase database:', error.message);
+  }
+}
+
+/**
  * Fast search: Get list of song results without fetching full lyrics
  * Returns quickly so user can choose the right song
  */
@@ -347,40 +466,62 @@ export async function fastLyricsSearch(
   userQuery: string
 ): Promise<SongSearchResult[]> {
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log('⚡ FAST SEARCH: Getting song list');
+  console.log('⚡ FAST SEARCH: Getting song list with cache optimization');
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('📝 Query:', userQuery);
 
   const results: SongSearchResult[] = [];
-
-  // Try both providers in parallel for speed
-  const [letrasResults, cifraResults] = await Promise.allSettled([
-    letrasmusic.findByAnyParameter(userQuery),
-    cifraclub.findByAnyParameter(userQuery),
-  ]);
-
-  // Add Letras.mus.br results
-  if (letrasResults.status === 'fulfilled' && letrasResults.value) {
-    results.push(...letrasResults.value.map(r => ({
-      title: r.title,
-      artist: r.artist,
-      url: r.url,
-      source: 'letrasmusic' as const,
-    })));
+  
+  // First, check if we have cached songs in Supabase database
+  console.log('🔍 Checking database cache first...');
+  const cachedResults = await searchInDatabaseCache(userQuery);
+  
+  if (cachedResults.length > 0) {
+    console.log(`✅ Found ${cachedResults.length} results in database cache`);
+    results.push(...cachedResults);
   }
+  
+  // If we have fewer than 5 results, search web providers
+  if (results.length < 5) {
+    console.log('🌍 Searching web providers for additional results...');
+    
+    // Try both providers in parallel for speed
+    const [letrasResults, cifraResults] = await Promise.allSettled([
+      letrasmusic.findByAnyParameter(userQuery),
+      cifraclub.findByAnyParameter(userQuery),
+    ]);
 
-  // Add CifraClub results
-  if (cifraResults.status === 'fulfilled' && cifraResults.value) {
-    results.push(...cifraResults.value.map(r => ({
-      title: r.title,
-      artist: r.artist,
-      url: r.url,
-      source: 'cifraclub' as const,
-    })));
+    // Add Letras.mus.br results
+    if (letrasResults.status === 'fulfilled' && letrasResults.value) {
+      results.push(...letrasResults.value.map(r => ({
+        title: r.title,
+        artist: r.artist,
+        url: r.url,
+        source: 'letrasmusic' as const,
+      })));
+    }
+
+    // Add CifraClub results
+    if (cifraResults.status === 'fulfilled' && cifraResults.value) {
+      results.push(...cifraResults.value.map(r => ({
+        title: r.title,
+        artist: r.artist,
+        url: r.url,
+        source: 'cifraclub' as const,
+      })));
+    }
   }
+  
+  // Remove duplicates based on title + artist combination
+  const uniqueResults = results.filter((result, index, self) => 
+    index === self.findIndex(r => 
+      r.title.toLowerCase() === result.title.toLowerCase() && 
+      r.artist.toLowerCase() === result.artist.toLowerCase()
+    )
+  );
 
-  console.log(`✅ Found ${results.length} results total`);
-  return results;
+  console.log(`✅ Found ${uniqueResults.length} unique results total (${results.length - uniqueResults.length} duplicates removed)`);
+  return uniqueResults;
 }
 
 /**
@@ -396,38 +537,49 @@ export async function fetchLyricsByUrl(
   console.log('🔗 URL:', url);
   console.log('📍 Source:', source);
 
-  // Extract artist and title from URL
+  // Extract artist from URL (title will be scraped from page)
   const urlParts = url.split('/').filter(Boolean);
-  const artist = urlParts[urlParts.length - 2]?.replace(/-/g, ' ') || '';
-  const title = urlParts[urlParts.length - 1]?.replace(/-/g, ' ').replace(/\.(html|htm)/, '') || '';
+  let artist = urlParts[urlParts.length - 2]?.replace(/-/g, ' ') || '';
+  let title = urlParts[urlParts.length - 1]?.replace(/-/g, ' ').replace(/\.(html|htm)/, '') || '';
+  
+  // For Letras.mus.br, if title looks like a number, we'll get the real title from scraping
+  const isNumberTitle = /^\d+$/.test(title.replace(/\s+/g, ''));
+  if (source === 'letrasmusic' && isNumberTitle) {
+    console.log('   📝 Title appears to be ID, will extract real title from page content');
+    title = 'unknown'; // Will be replaced by scraped title
+  }
 
   console.log('   Artist:', artist);
   console.log('   Title:', title);
 
-  // Check caches first (Supabase + Local)
-  console.log('\n🔍 Checking caches...');
+  // Check caches first (only if we have a real title, not ID)
+  if (!isNumberTitle) {
+    console.log('\n🔍 Checking caches...');
 
-  // Check Supabase
-  try {
-    const supabaseResult = await searchInSupabase(artist, title);
-    if (supabaseResult) {
-      console.log('✅ Found in Supabase cache!');
-      return supabaseResult;
+    // Check Supabase
+    try {
+      const supabaseResult = await searchInSupabase(artist, title);
+      if (supabaseResult) {
+        console.log('✅ Found in Supabase cache!');
+        return supabaseResult;
+      }
+    } catch (error) {
+      console.log('⚠️  Supabase check failed:', error.message);
     }
-  } catch (error) {
-    console.log('⚠️  Supabase check failed:', error.message);
-  }
 
-  // Check local
-  try {
-    const localResult = await searchInLocalCache(artist, title);
-    if (localResult) {
-      console.log('✅ Found in local cache!');
-      await saveToSupabase(localResult);
-      return localResult;
+    // Check local
+    try {
+      const localResult = await searchInLocalCache(artist, title);
+      if (localResult) {
+        console.log('✅ Found in local cache!');
+        await saveToSupabase(localResult);
+        return localResult;
+      }
+    } catch (error) {
+      console.log('⚠️  Local check failed:', error.message);
     }
-  } catch (error) {
-    console.log('⚠️  Local check failed:', error.message);
+  } else {
+    console.log('⚠️  Skipping cache check - need to scrape real title first');
   }
 
   // Fetch from web
@@ -442,8 +594,34 @@ export async function fetchLyricsByUrl(
 
   if (result) {
     console.log('✅ Lyrics fetched successfully!');
-    await saveEverywhere(result);
-    return result;
+    
+    // ALWAYS save to cache with enhanced metadata
+    const enhancedResult = {
+      ...result,
+      metadata: {
+        ...result.metadata,
+        url: url,
+        source: source,
+        fetchedAt: new Date().toISOString(),
+        // Enhanced metadata for search
+        searchTerms: [artist, title].filter(Boolean).join(' ').toLowerCase(),
+        genre: result.metadata?.genre || 'Gospel', // Default for Brazilian music sites
+        language: result.metadata?.language || 'pt-BR',
+        // Additional metadata that could be useful
+        provider: source,
+        cacheVersion: '1.0',
+      }
+    };
+    
+    console.log('📆 Saving to cache with enhanced metadata...');
+    console.log('   🎵 Enhanced metadata:', JSON.stringify(enhancedResult.metadata, null, 2));
+    
+    await saveEverywhere(enhancedResult);
+    
+    // Also save to Supabase database (songs table) for better search
+    await saveSongToDatabase(enhancedResult);
+    
+    return enhancedResult;
   }
 
   console.log('❌ Failed to fetch lyrics');

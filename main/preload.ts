@@ -55,6 +55,15 @@ contextBridge.exposeInMainWorld('api', {
   suggestFontPairing: (genre: string, mood: string) => ipcRenderer.invoke('suggest-font-pairing', { genre, mood }),
   discoverSongs: (query: string) => ipcRenderer.invoke('discover-songs', { query }),
   generateChords: (lyrics: string) => ipcRenderer.invoke('generate-chords', { lyrics }),
+
+  // Advanced Metadata
+  getAdvancedSongAnalysis: (artist: string, title: string, estimatedDuration?: number) =>
+    ipcRenderer.invoke('get-advanced-song-analysis', { artist, title, estimatedDuration }),
+  updateSongAnalysis: (artist: string, title: string, analysis: any) =>
+    ipcRenderer.invoke('update-song-analysis', { artist, title, analysis }),
+  generateAdvancedMetadata: (artist: string, title: string, lyrics: string, estimatedDuration?: number) =>
+    ipcRenderer.invoke('generate-advanced-metadata', { artist, title, lyrics, estimatedDuration }),
+
   // Settings
   getSetting: (key: string) => ipcRenderer.invoke('get-setting', key),
   setSetting: (key: string, value: any) => ipcRenderer.invoke('set-setting', { key, value }),

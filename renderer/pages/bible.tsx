@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import Head from 'next/head';
 import { motion } from 'framer-motion';
-import { Book, Search, BookOpen, Loader2 } from 'lucide-react';
+import { Book, Search, BookOpen, Loader2, Monitor } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -128,13 +128,28 @@ export default function Bible() {
 
     setIsSearching(true);
     try {
-      const response = await api?.getBibleVerse(book, chapter, verse, version);
+      const response = await api?.getBibleVerse(book, parseInt(chapter), parseInt(verse) || 0, version);
       setResult(response);
     } catch (error) {
       console.error('Error searching Bible verse:', error);
     } finally {
       setIsSearching(false);
     }
+  };
+
+  const handleSendToPresenter = () => {
+    if (!result) return;
+
+    // Format the Bible text as lyrics for the presenter
+    const bibleText = Array.isArray(result.text)
+      ? result.text.map((verse, index) => `${index + 1}. ${verse}`).join('\n\n')
+      : result.text;
+
+    // Create a temporary file path with the reference
+    const tempFilePath = `bible/${result.reference.replace(/\s+/g, '-').toLowerCase()}.txt`;
+
+    // Open the lyrics window with the Bible text
+    api?.openLyricsWindow('', tempFilePath, false);
   };
 
   return (
@@ -293,10 +308,10 @@ export default function Bible() {
             <div className='mt-3 flex gap-2'>
               <Button
                 size='sm'
-                variant='outline'
-                className='border-purple-500/20 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20'>
-                <BookOpen className='mr-1.5 h-3.5 w-3.5' />
-                Adicionar à Apresentação
+                onClick={handleSendToPresenter}
+                className='bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700'>
+                <Monitor className='mr-1.5 h-3.5 w-3.5' />
+                Enviar para Apresentação
               </Button>
               <Button
                 size='sm'

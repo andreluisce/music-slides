@@ -294,7 +294,7 @@ export async function removeTagFromSong(songId: string, tagId: string) {
   return true;
 }
 
-export async function getSongTags(songId: string) {
+export async function getSongTags(songId: string): Promise<Tag[]> {
   const { data, error } = await supabase
     .from('song_tags')
     .select('tag:tags(*)')
@@ -305,7 +305,7 @@ export async function getSongTags(songId: string) {
     return [];
   }
 
-  return data.map(item => item.tag) as Tag[];
+  return (data?.map(item => item.tag).filter(Boolean) || []) as unknown as Tag[];
 }
 
 // ========== FAVORITES ==========

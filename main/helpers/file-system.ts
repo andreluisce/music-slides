@@ -116,7 +116,7 @@ export async function migrateOldSongsToNewStructure(): Promise<{
       continue;
     }
 
-    // Ignora se não é .txt
+    // Migração de arquivos antigos .txt para .json (apenas para compatibilidade com versões antigas)
     if (!file.endsWith('.txt')) {
       continue;
     }

@@ -133,20 +133,59 @@ function LyricsDisplayPage() {
       if (!songLyric.length) {
         setIsLoading(true);
 
-        const { url, filePath, isDefault } = queryString.parse(location.search);
+        const { url, filePath, isDefault, empty } = queryString.parse(location.search);
+        console.log('📝 Lyrics: Parsed query params - filePath:', filePath, 'url:', url, 'isDefault:', isDefault, 'empty:', empty);
 
         const isDefaultBoolean = isDefault === 'true';
 
-        if (filePath) {
-          api?.getLyricByFilePath(filePath as string, isDefaultBoolean).then(res => {
-            setSongLyric(res);
-            setIsLoading(false);
-          });
+        // Validate filePath - check for null/undefined string values
+        const isValidFilePath = filePath && 
+          typeof filePath === 'string' && 
+          filePath !== 'null' && 
+          filePath !== 'undefined' && 
+          filePath.trim().length > 0;
+          
+        // Validate url - check for null/undefined string values
+        const isValidUrl = url && 
+          typeof url === 'string' && 
+          url !== 'null' && 
+          url !== 'undefined' && 
+          url.trim().length > 0;
+
+        if (isValidFilePath) {
+          console.log('📝 Lyrics: Loading from file path:', filePath);
+          api?.getLyricByFilePath(filePath as string, isDefaultBoolean)
+            .then(res => {
+              setSongLyric(res);
+              setIsLoading(false);
+            })
+            .catch(error => {
+              console.error('❌ Lyrics: Error loading from file:', error);
+              setIsLoading(false);
+              // Could show error state here
+            });
+        } else if (isValidUrl) {
+          console.log('📝 Lyrics: Loading from URL:', url);
+          api?.getLyricByUrlHandle(url as string)
+            .then(res => {
+              setSongLyric(res);
+              setIsLoading(false);
+            })
+            .catch(error => {
+              console.error('❌ Lyrics: Error loading from URL:', error);
+              setIsLoading(false);
+              // Could show error state here
+            });
+        } else if (empty === 'true') {
+          console.log('🌌 Lyrics: Opening empty lyrics window');
+          setIsLoading(false);
+          // Empty lyrics window - no lyrics to load
         } else {
-          api?.getLyricByUrlHandle(url as string).then(res => {
-            setSongLyric(res);
-            setIsLoading(false);
-          });
+          console.warn('⚠️ Lyrics: No valid filePath or url provided');
+          console.warn('   filePath:', filePath, '(valid:', isValidFilePath, ')');
+          console.warn('   url:', url, '(valid:', isValidUrl, ')');
+          setIsLoading(false);
+          // Could show "no lyrics" state here
         }
       }
     };

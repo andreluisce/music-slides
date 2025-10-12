@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Save, Loader2 } from 'lucide-react';
+import { ArrowLeft, Save, Loader2, Sparkles } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -25,6 +25,9 @@ function CreateSong() {
     source: 'manual',
   });
   const [loading, setLoading] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const [searchResults, setSearchResults] = useState([]);
+  const [showSearchResults, setShowSearchResults] = useState(false);
   const [originalArtist, setOriginalArtist] = useState('');
   const [originalTitle, setOriginalTitle] = useState('');
 
@@ -107,6 +110,74 @@ function CreateSong() {
     });
   };
 
+  const handleSearch = async () => {
+    const query = `${formData.artist} ${formData.title}`.trim();
+    if (!query || !api?.fastLyricsSearch) {
+      return;
+    }
+
+    // Check if both artist and title are provided
+    if (!formData.artist.trim() || !formData.title.trim()) {
+      alert('Por favor, preencha tanto o artista quanto o título da música para uma busca mais precisa.');
+      return;
+    }
+
+    setSearching(true);
+
+    try {
+      console.log('⚡ Searching for lyrics:', query);
+      const results = await api.fastLyricsSearch(query);
+
+      if (results && results.length > 0) {
+        setSearchResults(results);
+        setShowSearchResults(true);
+        console.log(`✅ Found ${results.length} results`);
+      } else {
+        alert('Nenhuma música encontrada. Tente ajustar o artista ou título.');
+        console.log('❌ No results found');
+      }
+    } catch (error) {
+      console.error('❌ Error searching lyrics:', error);
+      alert('Erro ao buscar letras. Tente novamente.');
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const handleSelectSearchResult = async (result) => {
+    setSearching(true);
+    setShowSearchResults(false);
+
+    try {
+      console.log('📥 Fetching lyrics for:', result.title, 'by', result.artist);
+      const fullResult = await api?.fetchLyricsByUrl(result.url, result.source);
+
+      if (fullResult && fullResult.lyrics) {
+        // Auto-fill the form with the fetched data
+        setFormData({
+          ...formData,
+          artist: fullResult.artist || result.artist,
+          title: fullResult.title || result.title,
+          lyrics: fullResult.lyrics,
+          genre: fullResult.metadata?.genre || formData.genre,
+          language: fullResult.metadata?.language || formData.language,
+          album: fullResult.metadata?.album || '',
+          year: fullResult.metadata?.year || '',
+          source: result.source,
+        });
+        console.log('✅ Lyrics loaded successfully');
+        alert('Letra carregada com sucesso! Revise e salve.');
+      } else {
+        alert('Erro ao buscar a letra completa. Tente novamente.');
+      }
+    } catch (error) {
+      console.error('❌ Error fetching lyrics:', error);
+      alert('Erro ao buscar letras. Tente novamente.');
+    } finally {
+      setSearching(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className='min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center'>
@@ -158,7 +229,8 @@ function CreateSong() {
                     value={formData.artist}
                     onChange={handleChange}
                     required
-                    className='bg-white/10 border-white/20 text-white placeholder:text-white/50'
+                    disabled={searching}
+                    className='bg-white/10 border-white/20 text-white placeholder:text-white/50 disabled:opacity-50'
                   />
                 </div>
 
@@ -173,9 +245,90 @@ function CreateSong() {
                     value={formData.title}
                     onChange={handleChange}
                     required
-                    className='bg-white/10 border-white/20 text-white placeholder:text-white/50'
+                    disabled={searching}
+                    className='bg-white/10 border-white/20 text-white placeholder:text-white/50 disabled:opacity-50'
                   />
                 </div>
+              </div>
+
+              {/* Search Button */}
+              {!isEditMode && formData.artist && formData.title && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className='mt-4'>
+                  <Button
+                    type='button'
+                    onClick={handleSearch}
+                    disabled={searching}
+                    className='w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700'>
+                    {searching ? (
+                      <>
+                        <Loader2 className='h-4 w-4 mr-2 animate-spin' />
+                        Buscando letras...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className='h-4 w-4 mr-2' />
+                        Buscar Letra Automaticamente
+                      </>
+                    )}
+                  </Button>
+                </motion.div>
+              )}
+
+              {/* Search Results */}
+              {showSearchResults && searchResults.length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className='mt-4'>
+                  <div className='rounded-xl border border-purple-500/30 bg-purple-500/10 p-4 backdrop-blur-sm'>
+                    <h3 className='mb-3 text-sm font-semibold text-white'>
+                      Selecione uma música ({searchResults.length} resultados)
+                    </h3>
+                    <div className='max-h-64 space-y-2 overflow-y-auto'>
+                      {searchResults.map((result, index) => (
+                        <motion.button
+                          key={index}
+                          type='button'
+                          initial={{ opacity: 0, x: -20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: index * 0.05 }}
+                          onClick={() => handleSelectSearchResult(result)}
+                          disabled={searching}
+                          className='group relative w-full overflow-hidden rounded-lg border border-white/10 bg-gradient-to-br from-white/5 to-white/10 p-3 text-left transition-all hover:border-purple-500/50 hover:from-purple-500/10 hover:to-pink-500/10 hover:shadow-lg hover:shadow-purple-500/20 disabled:opacity-50 disabled:cursor-not-allowed'>
+                          <div className='flex items-start gap-3'>
+                            <div className='flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-pink-500 text-xs font-bold text-white shadow-lg'>
+                              {index + 1}
+                            </div>
+                            <div className='min-w-0 flex-1'>
+                              <p className='truncate text-sm font-semibold text-white transition-colors group-hover:text-purple-300'>
+                                {result.title}
+                              </p>
+                              <p className='mt-0.5 truncate text-xs text-slate-400 transition-colors group-hover:text-slate-300'>
+                                {result.artist}
+                              </p>
+                              <p className='mt-1 text-xs text-slate-500'>
+                                {result.source === 'letrasmusic' ? 'Letras.mus.br' : 'CifraClub'}
+                              </p>
+                            </div>
+                          </div>
+                        </motion.button>
+                      ))}
+                    </div>
+                    <Button
+                      type='button'
+                      onClick={() => setShowSearchResults(false)}
+                      variant='ghost'
+                      className='mt-3 w-full text-white hover:bg-white/10'>
+                      Cancelar
+                    </Button>
+                  </div>
+                </motion.div>
+              )}
+
+              <div className='mt-6 grid gap-6 md:grid-cols-2'>
 
                 {/* Álbum */}
                 <div className='space-y-2'>

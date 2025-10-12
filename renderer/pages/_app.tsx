@@ -7,9 +7,9 @@ import Layout from '../components/Layout';
 import ErrorBoundary from '../components/ErrorBoundary';
 
 // Conditionally import ipcRenderer
-let ipcRenderer: Electron.IpcRenderer | undefined;
-if (typeof window !== 'undefined' && window.process && window.process.type === 'renderer') {
-  ipcRenderer = window.require('electron').ipcRenderer;
+let ipcRenderer: any | undefined;
+if (typeof window !== 'undefined' && (window as any).process && (window as any).process.type === 'renderer') {
+  ipcRenderer = (window as any).require('electron').ipcRenderer;
 }
 
 // Polyfill global for Electron

@@ -70,12 +70,12 @@ export async function uploadSongToSupabase(
 
     const normalizedArtist = normalizeNameForFileSystem(artist);
     const normalizedTitle = normalizeNameForFileSystem(title);
-    const filePath = `${normalizedArtist}/${normalizedTitle}.txt`;
+    const filePath = `${normalizedArtist}/${normalizedTitle}.json`;
 
     const { data, error } = await supabase.storage
       .from(BUCKET_NAME)
       .upload(filePath, fileContent, {
-        contentType: 'text/plain; charset=utf-8',
+        contentType: 'application/json; charset=utf-8',
         upsert: true, // Sobrescreve se já existir
       });
 
@@ -104,7 +104,7 @@ export async function downloadSongFromSupabase(
     const supabase = getSupabaseClient();
     const normalizedArtist = normalizeNameForFileSystem(artist);
     const normalizedTitle = normalizeNameForFileSystem(title);
-    const filePath = `${normalizedArtist}/${normalizedTitle}.txt`;
+    const filePath = `${normalizedArtist}/${normalizedTitle}.json`;
 
     const { data, error } = await supabase.storage.from(BUCKET_NAME).download(filePath);
 
@@ -115,6 +115,15 @@ export async function downloadSongFromSupabase(
 
     const fileContent = await data.text();
     console.log(`☁️ Downloaded from Supabase: ${filePath} (with metadata)`);
+    
+    // Validate that it's valid JSON
+    try {
+      JSON.parse(fileContent);
+    } catch (parseError) {
+      console.error(`❌ Invalid JSON downloaded from ${filePath}:`, parseError);
+      return null;
+    }
+    
     return fileContent;
   } catch (error) {
     console.error('❌ Supabase download failed:', error);
@@ -151,10 +160,10 @@ export async function listSupabaseSongs(): Promise<
         });
 
         for (const file of songFiles || []) {
-          if (file.name.endsWith('.txt')) {
+          if (file.name.endsWith('.json')) {
             songs.push({
               artist: folder.name.replace(/-/g, ' '),
-              title: file.name.replace('.txt', '').replace(/-/g, ' '),
+              title: file.name.replace('.json', '').replace(/-/g, ' '),
               path: `${folder.name}/${file.name}`,
             });
           }
@@ -185,7 +194,7 @@ export async function syncLocalToSupabase(): Promise<{
       for (const song of artistGroup.songs) {
         try {
           const lyrics = await fse.readFile(
-            `${getArtistFolderPath(artistGroup.artist)}/${song.normalizedTitle}.txt`,
+            `${getArtistFolderPath(artistGroup.artist)}/${song.normalizedTitle}.json`,
             'utf8'
           );
 

@@ -12,7 +12,7 @@ export const BibleVerseSearch = () => {
   const [result, setResult] = useState(null);
 
   const handleSearch = async () => {
-    const response = await api.getBibleVerse(book, chapter, verse);
+    const response = await api.getBibleVerse(book, parseInt(chapter), parseInt(verse), 'nvi');
     setResult(response);
   };
 
