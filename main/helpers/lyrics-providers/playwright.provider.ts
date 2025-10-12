@@ -1,5 +1,10 @@
 import { chromium, Browser, Page } from 'playwright';
 
+export interface LyricsProvider {
+  url: string;
+  getLyrics(page: Page, title: string, artist: string): Promise<string | null>;
+}
+
 /**
  * Singleton browser instance for Playwright scraping
  * Reusing the same browser improves performance
@@ -135,6 +140,18 @@ export async function navigateWithRetry(
 }
 
 /**
+ * Takes a screenshot of the current page.
+ */
+export async function takeScreenshot(page: Page, path: string): Promise<void> {
+  try {
+    await page.screenshot({ path });
+    console.log(`📸 Screenshot saved to ${path}`);
+  } catch (error) {
+    console.error(`❌ Failed to take screenshot: ${error.message}`);
+  }
+}
+
+/**
  * Attempts to handle and close an ad-blocker modal if present.
  */
 export async function handleAdBlockerModal(page: Page): Promise<void> {
@@ -142,23 +159,67 @@ export async function handleAdBlockerModal(page: Page): Promise<void> {
   const closeButtonSelector = '.fc-close';
 
   try {
+    await takeScreenshot(page, './debug_screenshots/before_modal_check.png');
+    console.log('🔍 Checking for ad-blocker modal...');
+
     // Check if the modal is visible
     const isModalVisible = await waitForSelector(page, modalSelector, 5000); // Shorter timeout for modal check
 
     if (isModalVisible) {
       console.log(' detected ad-blocker modal. Attempting to close...');
+      await takeScreenshot(page, './debug_screenshots/modal_detected.png');
+
       const closeButton = page.locator(closeButtonSelector).first();
       if (await closeButton.isVisible()) {
         await closeButton.click();
         console.log('✅ Ad-blocker modal closed.');
         // Wait for the modal to disappear
         await page.waitForSelector(modalSelector, { state: 'hidden', timeout: 5000 }).catch(() => {});
+        await takeScreenshot(page, './debug_screenshots/modal_closed.png');
       } else {
         console.log('❌ Close button not visible in ad-blocker modal.');
+        await takeScreenshot(page, './debug_screenshots/close_button_not_visible.png');
       }
+    } else {
+      console.log('✅ No ad-blocker modal detected.');
     }
   } catch (error) {
-    console.log('ℹ️ No ad-blocker modal detected or error handling it.', error.message);
+    console.error('❌ Error handling ad-blocker modal:', error.message);
+    await takeScreenshot(page, './debug_screenshots/error_handling_modal.png');
+  }
+}
+
+/**
+ * Attempts to handle and close a consent modal if present.
+ */
+export async function handleConsentModal(page: Page): Promise<void> {
+  const consentButtonSelector = 'button:has-text("Consentir")';
+
+  try {
+    console.log('🔍 Checking for consent modal...');
+    const isConsentButtonVisible = await waitForSelector(page, consentButtonSelector, 5000);
+
+    if (isConsentButtonVisible) {
+      console.log(' detected consent modal. Attempting to consent...');
+      await takeScreenshot(page, './debug_screenshots/consent_modal_detected.png');
+
+      const consentButton = page.locator(consentButtonSelector).first();
+      if (await consentButton.isVisible()) {
+        await consentButton.click();
+        console.log('✅ Consent modal handled.');
+        // Wait for the modal to disappear (assuming it does after clicking consent)
+        await page.waitForLoadState('domcontentloaded', { timeout: 5000 }).catch(() => {});
+        await takeScreenshot(page, './debug_screenshots/consent_modal_handled.png');
+      } else {
+        console.log('❌ Consent button not visible in consent modal.');
+        await takeScreenshot(page, './debug_screenshots/consent_button_not_visible.png');
+      }
+    } else {
+      console.log('✅ No consent modal detected.');
+    }
+  } catch (error) {
+    console.error('❌ Error handling consent modal:', error.message);
+    await takeScreenshot(page, './debug_screenshots/error_handling_consent_modal.png');
   }
 }
 
