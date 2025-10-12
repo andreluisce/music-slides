@@ -5,6 +5,7 @@ import {
   safeAttribute,
   waitForSelector,
   cleanLyricsText,
+  handleAdBlockerModal,
 } from './playwright.provider';
 
 const BASE_URL = 'https://www.letras.mus.br';
@@ -40,6 +41,8 @@ export async function searchByTitleAndArtist({
       console.log('❌ Failed to navigate to Letras.mus.br search');
       return null;
     }
+
+    await handleAdBlockerModal(page);
 
     // Wait for search results - try multiple selectors
     let hasResults = await waitForSelector(page, '.cnt-list-songs a', 3000);
@@ -168,7 +171,9 @@ export async function findByAnyParameter(searchTerm: string): Promise<any[]> {
       return [];
     }
 
-    const hasResults = await waitForSelector(page, '.cnt-list-songs li', 5000);
+    await handleAdBlockerModal(page);
+
+    const hasResults = await waitForSelector(page, '.cnt-list-songs li', 10000);
     if (!hasResults) {
       return [];
     }

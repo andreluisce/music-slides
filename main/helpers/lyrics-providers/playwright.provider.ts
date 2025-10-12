@@ -135,6 +135,34 @@ export async function navigateWithRetry(
 }
 
 /**
+ * Attempts to handle and close an ad-blocker modal if present.
+ */
+export async function handleAdBlockerModal(page: Page): Promise<void> {
+  const modalSelector = '.fc-ab-root';
+  const closeButtonSelector = '.fc-close';
+
+  try {
+    // Check if the modal is visible
+    const isModalVisible = await waitForSelector(page, modalSelector, 5000); // Shorter timeout for modal check
+
+    if (isModalVisible) {
+      console.log(' detected ad-blocker modal. Attempting to close...');
+      const closeButton = page.locator(closeButtonSelector).first();
+      if (await closeButton.isVisible()) {
+        await closeButton.click();
+        console.log('✅ Ad-blocker modal closed.');
+        // Wait for the modal to disappear
+        await page.waitForSelector(modalSelector, { state: 'hidden', timeout: 5000 }).catch(() => {});
+      } else {
+        console.log('❌ Close button not visible in ad-blocker modal.');
+      }
+    }
+  } catch (error) {
+    console.log('ℹ️ No ad-blocker modal detected or error handling it.', error.message);
+  }
+}
+
+/**
  * Clean up lyrics text
  */
 export function cleanLyricsText(text: string): string {
