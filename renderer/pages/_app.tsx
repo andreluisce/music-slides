@@ -6,6 +6,12 @@ import '../styles/globals.css';
 import Layout from '../components/Layout';
 import ErrorBoundary from '../components/ErrorBoundary';
 
+// Conditionally import ipcRenderer
+let ipcRenderer: Electron.IpcRenderer | undefined;
+if (typeof window !== 'undefined' && window.process && window.process.type === 'renderer') {
+  ipcRenderer = window.require('electron').ipcRenderer;
+}
+
 // Polyfill global for Electron
 if (typeof window !== 'undefined' && !(window as any).global) {
   (window as any).global = window;
@@ -21,12 +27,24 @@ function MyApp({ Component, pageProps }: AppProps) {
   useEffect(() => {
     const handleError = (event: ErrorEvent) => {
       console.error('Unhandled Error in Renderer Process:', event.error);
-      // Optionally, display a user-friendly error message
+      if (ipcRenderer) { // Only send if ipcRenderer is available
+        ipcRenderer.send('renderer-error', {
+          message: event.message,
+          stack: event.error?.stack,
+          type: 'error',
+        });
+      }
     };
 
     const handleRejection = (event: PromiseRejectionEvent) => {
       console.error('Unhandled Promise Rejection in Renderer Process:', event.reason);
-      // Optionally, display a user-friendly error message
+      if (ipcRenderer) { // Only send if ipcRenderer is available
+        ipcRenderer.send('renderer-error', {
+          message: event.reason instanceof Error ? event.reason.message : String(event.reason),
+          stack: event.reason instanceof Error ? event.reason.stack : undefined,
+          type: 'unhandledRejection',
+        });
+      }
     };
 
     window.addEventListener('error', handleError);

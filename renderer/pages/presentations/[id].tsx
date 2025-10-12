@@ -27,6 +27,8 @@ import {
 import { getAllSongs } from '../../lib/supabase-service';
 import type { Presentation, PresentationItem, Song } from '../../lib/supabase';
 
+const api = typeof window !== 'undefined' ? window.api : undefined;
+
 export default function PresentationEditor() {
   const router = useRouter();
   const { id } = router.query;
@@ -34,6 +36,7 @@ export default function PresentationEditor() {
   const [presentation, setPresentation] = useState<Presentation | null>(null);
   const [items, setItems] = useState<PresentationItem[]>([]);
   const [songs, setSongs] = useState<Song[]>([]);
+  const [localSongs, setLocalSongs] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [editingName, setEditingName] = useState(false);
@@ -45,6 +48,7 @@ export default function PresentationEditor() {
     if (id && typeof id === 'string') {
       loadPresentation(id);
       loadSongs();
+      loadLocalSongs();
     }
   }, [id]);
 
@@ -71,6 +75,25 @@ export default function PresentationEditor() {
       setSongs(data);
     } catch (error) {
       console.error('Error loading songs:', error);
+    }
+  };
+
+  const loadLocalSongs = async () => {
+    try {
+      const artistGroups = await api?.getAllLocalSongs();
+      if (artistGroups) {
+        const flattenedSongs = artistGroups.flatMap(group =>
+          group.songs.map(song => ({
+            title: song.title,
+            artist: group.artist,
+            filePath: `${group.normalizedArtist}/${song.normalizedTitle}.txt`,
+            isLocal: true,
+          }))
+        );
+        setLocalSongs(flattenedSongs);
+      }
+    } catch (error) {
+      console.error('Error loading local songs:', error);
     }
   };
 
@@ -140,7 +163,13 @@ export default function PresentationEditor() {
     }
   };
 
-  const filteredSongs = songs.filter(
+  // Combine Supabase and local songs
+  const allSongs = [
+    ...songs.map(s => ({ ...s, isLocal: false })),
+    ...localSongs
+  ];
+
+  const filteredSongs = allSongs.filter(
     (song) =>
       song.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       song.artist.toLowerCase().includes(searchQuery.toLowerCase())
@@ -325,13 +354,22 @@ export default function PresentationEditor() {
                 className='mb-4 border-white/20 bg-white/10 text-white placeholder:text-slate-400'
               />
               <div className='space-y-2 overflow-y-auto'>
-                {filteredSongs.map((song) => (
+                {filteredSongs.map((song, index) => (
                   <div
-                    key={song.id}
+                    key={song.id || `local-${index}`}
                     onClick={() => handleAddSong(song)}
                     className='cursor-pointer rounded-lg border border-white/10 bg-white/5 p-3 transition-all hover:bg-white/10'>
-                    <h4 className='font-semibold text-white'>{song.title}</h4>
-                    <p className='text-sm text-slate-400'>{song.artist}</p>
+                    <div className='flex items-start justify-between gap-2'>
+                      <div className='flex-1'>
+                        <h4 className='font-semibold text-white'>{song.title}</h4>
+                        <p className='text-sm text-slate-400'>{song.artist}</p>
+                      </div>
+                      {song.isLocal && (
+                        <span className='rounded-full bg-purple-500/20 px-1.5 py-0.5 text-[10px] text-purple-300'>
+                          Local
+                        </span>
+                      )}
+                    </div>
                   </div>
                 ))}
                 {filteredSongs.length === 0 && (

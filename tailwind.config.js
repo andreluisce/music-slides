@@ -22,6 +22,14 @@ module.exports = {
       },
     },
     extend: {
+      fontFamily: {
+        'open-sans': ['"Open Sans"', 'sans-serif'],
+        'lato': ['Lato', 'sans-serif'],
+        'roboto': ['Roboto', 'sans-serif'],
+        'plus-jakarta': ['"Plus Jakarta Sans"', 'sans-serif'],
+        'dm-sans': ['"DM Sans"', 'sans-serif'],
+        'epilogue': ['Epilogue', 'sans-serif'],
+      },
       colors: {
         border: 'hsl(214.3 31.8% 91.4%)',
         input: 'hsl(214.3 31.8% 91.4%)',

@@ -31,6 +31,8 @@ import { logError } from './helpers/file-system';
 let lyricsWindow: BrowserWindow;
 let lyricsSettingsWindow: BrowserWindow;
 let mainWindow: BrowserWindow;
+let videoPlayerWindow: BrowserWindow;
+let videoControlWindow: BrowserWindow;
 let lastLoadedLyrics: string[] | null = null;
 
 const isProd: boolean = process.env.NODE_ENV === 'production';
@@ -73,6 +75,12 @@ if (isProd) {
     }
     if (lyricsWindow && !lyricsWindow.isDestroyed()) {
       lyricsWindow.close();
+    }
+    if (videoControlWindow && !videoControlWindow.isDestroyed()) {
+      videoControlWindow.close();
+    }
+    if (videoPlayerWindow && !videoPlayerWindow.isDestroyed()) {
+      videoPlayerWindow.close();
     }
   });
 })();
@@ -122,18 +130,21 @@ export async function openLyricsWindow(url, filePath, isDefault = false) {
   if (isProd) {
     await lyricsWindow.loadURL(`app://./lyrics.html${additionalQueryString}`);
     await lyricsSettingsWindow.loadURL(
-      `app://./lyrics-settings.html?windowid=${lyricsWindow.webContents.id}`
+      `app://./lyrics-settings.html?windowid=${lyricsWindow.id}`
     );
   } else {
     const port = process.argv[2];
     await lyricsWindow.loadURL(`http://localhost:${port}/lyrics${additionalQueryString}`);
 
-    // lyricsWindow.webContents.openDevTools();
+    lyricsWindow.webContents.openDevTools();
+    lyricsSettingsWindow.webContents.openDevTools();
 
     await lyricsSettingsWindow.loadURL(
-      `http://localhost:${port}/lyrics-settings?windowid=${lyricsWindow.webContents.id}`
+      `http://localhost:${port}/lyrics-settings?windowid=${lyricsWindow.id}`
     );
   }
+
+  console.log('🪟 Main: Created lyrics windows. Lyrics window ID:', lyricsWindow.id, 'Settings window ID:', lyricsSettingsWindow.id);
 
   // Once settings window is ready, resend last lyrics if any queued
   lyricsSettingsWindow.webContents.on('did-finish-load', () => {
@@ -150,6 +161,120 @@ export async function openLyricsWindow(url, filePath, isDefault = false) {
 
 ipcMain.on('open-lyrics-window', (event, { url, filePath, isDefault = false }) => {
   openLyricsWindow(url, filePath, isDefault);
+});
+
+// Video Player functionality
+export async function openVideoPlayerWindow() {
+  const displays = screen.getAllDisplays();
+  const displayToShowTheVideo = displays?.[1] || displays?.[0];
+
+  videoPlayerWindow = createWindow('videoPlayer', {
+    ...displayToShowTheVideo.bounds,
+    width: 800,
+    height: 600,
+    fullscreen: true,
+  });
+
+  videoControlWindow = createWindow('videoControl', {
+    width: 800,
+    height: 600,
+  });
+
+  videoPlayerWindow.on('closed', () => {
+    if (!videoControlWindow?.isDestroyed()) {
+      videoControlWindow?.close();
+    }
+  });
+
+  videoControlWindow.on('closed', () => {
+    if (!videoPlayerWindow?.isDestroyed()) {
+      videoPlayerWindow?.close();
+    }
+  });
+
+  if (isProd) {
+    await videoPlayerWindow.loadURL('app://./video-player.html');
+    await videoControlWindow.loadURL(
+      `app://./video-control.html?windowid=${videoPlayerWindow.webContents.id}`
+    );
+  } else {
+    const port = process.argv[2];
+    await videoPlayerWindow.loadURL(`http://localhost:${port}/video-player`);
+    await videoControlWindow.loadURL(
+      `http://localhost:${port}/video-control?windowid=${videoPlayerWindow.webContents.id}`
+    );
+  }
+}
+
+ipcMain.on('open-video-player-window', () => {
+  openVideoPlayerWindow();
+});
+
+// Video player control commands
+ipcMain.on('video-play', (event) => {
+  console.log('🎮 Main: Received video-play command');
+  if (videoPlayerWindow && !videoPlayerWindow.isDestroyed()) {
+    console.log('✅ Main: Sending video-play to player window');
+    videoPlayerWindow.webContents.send('video-play');
+  } else {
+    console.log('❌ Main: Video player window not available');
+  }
+});
+
+ipcMain.on('video-pause', (event) => {
+  console.log('🎮 Main: Received video-pause command');
+  if (videoPlayerWindow && !videoPlayerWindow.isDestroyed()) {
+    console.log('✅ Main: Sending video-pause to player window');
+    videoPlayerWindow.webContents.send('video-pause');
+  } else {
+    console.log('❌ Main: Video player window not available');
+  }
+});
+
+ipcMain.on('video-seek', (event, { time }) => {
+  console.log('🎮 Main: Received video-seek command:', time);
+  if (videoPlayerWindow && !videoPlayerWindow.isDestroyed()) {
+    console.log('✅ Main: Sending video-seek to player window');
+    videoPlayerWindow.webContents.send('video-seek', { time });
+  } else {
+    console.log('❌ Main: Video player window not available');
+  }
+});
+
+ipcMain.on('video-volume', (event, { volume }) => {
+  console.log('🎮 Main: Received video-volume command:', volume);
+  if (videoPlayerWindow && !videoPlayerWindow.isDestroyed()) {
+    console.log('✅ Main: Sending video-volume to player window');
+    videoPlayerWindow.webContents.send('video-volume', { volume });
+  } else {
+    console.log('❌ Main: Video player window not available');
+  }
+});
+
+ipcMain.on('load-video', (event, { url }) => {
+  console.log('🎮 Main: Received load-video command:', url);
+  if (videoPlayerWindow && !videoPlayerWindow.isDestroyed()) {
+    console.log('✅ Main: Sending load-video to player window');
+    videoPlayerWindow.webContents.send('load-video', { url });
+  } else {
+    console.log('❌ Main: Video player window not available');
+  }
+});
+
+ipcMain.on('video-stop', (event) => {
+  console.log('🎮 Main: Received video-stop command');
+  if (videoPlayerWindow && !videoPlayerWindow.isDestroyed()) {
+    console.log('✅ Main: Sending video-stop to player window');
+    videoPlayerWindow.webContents.send('video-stop');
+  } else {
+    console.log('❌ Main: Video player window not available');
+  }
+});
+
+ipcMain.on('video-time-update', (event, { currentTime, duration }) => {
+  if (videoControlWindow && !videoControlWindow.isDestroyed()) {
+    videoControlWindow.webContents.send('video-time-update', { currentTime, duration });
+  }
 });
 
 ipcMain.handle('get-path', (event, { name }) => {
@@ -341,30 +466,48 @@ ipcMain.handle('set-setting', async (_event, { key, value }) => {
 });
 
 ipcMain.on('select-video-background', (event, { windowId, video }) => {
+  console.log('📨 IPC: Received select-video-background. WindowId:', windowId, 'Video:', video);
   const targetWindow = BrowserWindow.fromId(windowId);
   if (targetWindow && !targetWindow.isDestroyed()) {
+    console.log('✅ IPC: Sending to lyrics window. Window exists:', !targetWindow.isDestroyed());
     targetWindow.webContents.send('selected-video-background', video);
+  } else {
+    console.error('❌ IPC: Target window not found or destroyed. WindowId:', windowId);
   }
 });
 
 ipcMain.on('set-custom-background', (event, { windowId, background }) => {
+  console.log('📨 IPC: Received set-custom-background. WindowId:', windowId, 'Background:', background?.substring?.(0, 50) || background);
   const targetWindow = BrowserWindow.fromId(windowId);
   if (targetWindow && !targetWindow.isDestroyed()) {
+    console.log('✅ IPC: Sending to lyrics window. Window exists:', !targetWindow.isDestroyed());
     targetWindow.webContents.send('custom-background', background);
+  } else {
+    console.error('❌ IPC: Target window not found or destroyed. WindowId:', windowId);
   }
 });
 
 ipcMain.on('set-active-slide', (event, { windowId, index }) => {
+  console.log('🎮 Main: Received set-active-slide. WindowId:', windowId, 'Index:', index);
+  console.log('🔍 Main: All windows:', BrowserWindow.getAllWindows().map(w => ({ id: w.id, title: w.getTitle() })));
   const targetWindow = BrowserWindow.fromId(windowId);
   if (targetWindow && !targetWindow.isDestroyed()) {
+    console.log('✅ Main: Sending slide-clicked-index to lyrics window. Window title:', targetWindow.getTitle());
     targetWindow.webContents.send('slide-clicked-index', index);
+  } else {
+    console.log('❌ Main: Target window not found or destroyed. WindowId:', windowId);
   }
 });
 
 ipcMain.on('update-lyrics-theme', (event, { windowId, themeData }) => {
+  console.log('🎮 Main: Received update-lyrics-theme. WindowId:', windowId, 'Theme data:', themeData);
+  console.log('🔍 Main: All windows:', BrowserWindow.getAllWindows().map(w => ({ id: w.id, title: w.getTitle() })));
   const targetWindow = BrowserWindow.fromId(windowId);
   if (targetWindow && !targetWindow.isDestroyed()) {
+    console.log('✅ Main: Sending theme-update to lyrics window. Window title:', targetWindow.getTitle());
     targetWindow.webContents.send('theme-update', themeData);
+  } else {
+    console.log('❌ Main: Target window not found or destroyed. WindowId:', windowId);
   }
 });
 

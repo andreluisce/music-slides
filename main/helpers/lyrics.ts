@@ -4,6 +4,7 @@ import * as lyricsovh from './lyrics-providers/lyricsovh.provider';
 import { interpretLyricsQuery, cleanLyrics } from './ai-service';
 import { getGeminiResponse } from './gemini';
 import { SearchType } from '../../renderer/shared/types';
+import { intelligentLyricsSearch } from './lyrics-agent';
 
 interface SongInfo {
   title: string;
@@ -13,91 +14,6 @@ interface SongInfo {
   theme?: string;
 }
 
-export const smartLyricsSearch = async (userQuery: string) => {
-  try {
-    console.log('🔍 Starting smart search for:', userQuery);
-
-    // Step 1: AI interprets the vague/fuzzy query
-    const interpretation = await interpretLyricsQuery(userQuery);
-    const { title, artist, alternatives, confidence } = interpretation;
-
-    console.log(`🤖 AI Interpretation (${confidence}% confidence):`, {
-      title,
-      artist,
-      alternatives: alternatives.length
-    });
-
-    // Step 2: Try multiple sources in priority order
-    const searchAttempts = [
-      // Primary attempt with AI interpretation
-      {
-        name: 'Lyrics.ovh (Primary)',
-        search: () => lyricsovh.searchByTitleAndArtist({ title, artist })
-      },
-      {
-        name: 'Genius (Primary)',
-        search: () => genius.searchByTitleAndArtistExact({ title, artist })
-      },
-      {
-        name: 'Vagalume (Primary)',
-        search: () => vagalume.searchByTitleAndArtistExact({ title, artist })
-      },
-      // Try alternatives
-      ...alternatives.flatMap(alt => [
-        {
-          name: `Lyrics.ovh (Alt: ${alt.title})`,
-          search: () => lyricsovh.searchByTitleAndArtist({ title: alt.title, artist: alt.artist })
-        },
-        {
-          name: `Genius (Alt: ${alt.title})`,
-          search: () => genius.searchByTitleAndArtistExact({ title: alt.title, artist: alt.artist })
-        }
-      ]),
-      // Broad search as last resort
-      {
-        name: 'Broad search (Genius)',
-        search: () => findByAnyParameter(`${title} ${artist}`)
-      }
-    ];
-
-    // Try each source
-    for (const attempt of searchAttempts) {
-      try {
-        console.log(`🔎 Trying: ${attempt.name}`);
-        const result = await attempt.search();
-
-        if (result) {
-          // Handle different response formats
-          if (Array.isArray(result)) {
-            if (result.length > 0) {
-              console.log(`✅ Found ${result.length} results via ${attempt.name}`);
-              return result;
-            }
-          } else if (result.lyrics && result.lyrics.length > 0) {
-            console.log(`✅ Found lyrics via ${attempt.name}`);
-            // Convert single result to array format
-            return [{
-              title: result.title,
-              artist: result.artist,
-              url: `/lyrics/${encodeURIComponent(result.artist)}/${encodeURIComponent(result.title)}.html`,
-              lyrics: result.lyrics
-            }];
-          }
-        }
-      } catch (error) {
-        console.log(`❌ ${attempt.name} failed:`, error.message);
-        continue;
-      }
-    }
-
-    console.log('❌ No results found from any source');
-    return [];
-  } catch (error) {
-    console.error('❌ Error in smartLyricsSearch:', error);
-    // Fallback to basic search
-    return findByAnyParameter(userQuery);
-  }
-};
 
 export const formatLyrics = async (lyrics: string) => {
   try {
@@ -190,20 +106,53 @@ export const suggestBibleVerses = async (lyrics: string) => {
   try {
     const bibleVerses = await getGeminiResponse({
       prompt: `Analyze the themes and messages in the following song lyrics and suggest 3-5 relevant Bible verses. For each verse, provide the book, chapter, and verse number. Return a JSON array of objects, where each object has 'book', 'chapter', and 'verse' properties.
-      
+
       Lyrics: """${lyrics}"""
-      
+
       Example of desired output format:
       [
         { "book": "John", "chapter": 3, "verse": 16 },
         { "book": "Psalm", "chapter": 23, "verse": 1 }
       ]
-      
+
       Return JSON array only.`
     });
     return JSON.parse(bibleVerses);
   } catch (error) {
     console.error('Error suggesting Bible verses:', error);
     return [];
+  }
+};
+
+/**
+ * Advanced lyrics search with 3-level fallback system
+ * 1. Supabase cache (cloud)
+ * 2. Local cache (file system)
+ * 3. Web scraping (Playwright - Letras.mus.br, CifraClub)
+ *
+ * Automatically saves results to both Supabase and local storage
+ */
+export const advancedLyricsSearch = async (userQuery: string) => {
+  try {
+    console.log('🚀 Starting advanced lyrics search for:', userQuery);
+    const result = await intelligentLyricsSearch(userQuery);
+
+    if (!result) {
+      console.log('❌ No lyrics found via advanced search');
+      return null;
+    }
+
+    console.log(`✅ Advanced search successful via ${result.source}`);
+
+    return {
+      title: result.title,
+      artist: result.artist,
+      lyrics: result.lyrics,
+      source: result.source,
+      metadata: result.metadata,
+    };
+  } catch (error) {
+    console.error('❌ Advanced lyrics search failed:', error);
+    return null;
   }
 };

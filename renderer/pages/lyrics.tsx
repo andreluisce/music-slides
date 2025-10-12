@@ -20,87 +20,221 @@ function LyricsDisplayPage() {
   const [showPagination, setShowPagination] = useState(true);
   const [showLogo, setShowLogo] = useState(true);
   const [customBackground, setCustomBackground] = useState<string>('');
-  const [customLogo, setCustomLogo] = useState<string>('');
+  const [logoPath, setLogoPath] = useState<string>('/images/logo.svg');
+  const [backgroundType, setBackgroundType] = useState<string>('gradient');
 
-  // Load settings
+  // Load settings, theme, and lyrics
   useEffect(() => {
-    const loadSettings = async () => {
+    const loadInitialData = async () => {
       const showPaginationSetting = await api?.getSetting('showPagination');
       const showLogoSetting = await api?.getSetting('showLogo');
-      const customLogoSetting = await api?.getSetting('customLogo');
+      const logoPathSetting = await api?.getSetting('logoPath');
+      const videoBackgroundPathSetting = await api?.getSetting('videoBackgroundPath');
+      const savedSelectedThemeId = await api?.getSetting('selectedThemeId');
+      const savedFontSize = await api?.getSetting('fontSize');
+      const savedBackgroundType = await api?.getSetting('backgroundType');
+      const savedSolidColor = await api?.getSetting('solidColor');
+      const savedGradientStart = await api?.getSetting('gradientStart');
+      const savedGradientEnd = await api?.getSetting('gradientEnd');
+      const savedBackgroundImage = await api?.getSetting('backgroundImage');
+
+      console.log('⚙️ Lyrics: Loaded settings:', {
+        showPaginationSetting,
+        showLogoSetting,
+        logoPathSetting,
+        videoBackgroundPathSetting,
+        savedSelectedThemeId,
+        savedFontSize,
+        savedBackgroundType,
+        savedSolidColor,
+        savedGradientStart,
+        savedGradientEnd,
+        savedBackgroundImage,
+      });
 
       if (showPaginationSetting !== undefined) setShowPagination(showPaginationSetting);
       if (showLogoSetting !== undefined) setShowLogo(showLogoSetting);
-      if (customLogoSetting) setCustomLogo(customLogoSetting);
-    };
-    loadSettings();
-  }, []);
+      if (logoPathSetting) {
+        if (logoPathSetting === 'logo.svg') {
+          setLogoPath('/images/logo.svg');
+        } else {
+          setLogoPath(logoPathSetting);
+        }
+      }
 
-  // Load default theme
-  useEffect(() => {
-    const loadTheme = async () => {
+      // Load background settings based on type
+      if (savedBackgroundType) {
+        setBackgroundType(savedBackgroundType);
+
+        switch (savedBackgroundType) {
+          case 'video':
+            if (videoBackgroundPathSetting) {
+              setVideoBackgroundPath(videoBackgroundPathSetting);
+              setCustomBackground('');
+            }
+            break;
+          case 'color':
+            if (savedSolidColor) {
+              setCustomBackground(savedSolidColor);
+              setVideoBackgroundPath('');
+            }
+            break;
+          case 'gradient':
+            if (savedGradientStart && savedGradientEnd) {
+              setCustomBackground(`linear-gradient(135deg, ${savedGradientStart}, ${savedGradientEnd})`);
+              setVideoBackgroundPath('');
+            }
+            break;
+          case 'image':
+            if (savedBackgroundImage) {
+              setCustomBackground(`url(${savedBackgroundImage}) center/cover no-repeat`);
+              setVideoBackgroundPath('');
+            }
+            break;
+          case 'none':
+          default:
+            setCustomBackground('');
+            setVideoBackgroundPath('');
+            break;
+        }
+      }
+
       try {
         const themes = await getAllThemes();
-        const defaultTheme = themes.find(t => t.is_default) || themes[0];
-        setCurrentTheme(defaultTheme);
+        let initialTheme = themes.find(t => t.is_default) || themes[0];
+
+        if (savedSelectedThemeId) {
+          const foundTheme = themes.find(t => t.id === savedSelectedThemeId);
+          if (foundTheme) {
+            initialTheme = foundTheme;
+          }
+        }
+
+        if (initialTheme) {
+          if (savedFontSize !== undefined) {
+            initialTheme = { ...initialTheme, font_size: savedFontSize };
+          }
+          setCurrentTheme(initialTheme);
+        }
       } catch (error) {
-        console.error('Error loading theme:', error);
+        console.error('Error loading themes:', error);
+      }
+
+      // Load lyrics
+      if (!songLyric.length) {
+        setIsLoading(true);
+
+        const { url, filePath, isDefault } = queryString.parse(location.search);
+
+        const isDefaultBoolean = isDefault === 'true';
+
+        if (filePath) {
+          api?.getLyricByFilePath(filePath as string, isDefaultBoolean).then(res => {
+            setSongLyric(res);
+            setIsLoading(false);
+          });
+        } else {
+          api?.getLyricByUrlHandle(url as string).then(res => {
+            setSongLyric(res);
+            setIsLoading(false);
+          });
+        }
       }
     };
-    loadTheme();
+    loadInitialData();
   }, []);
 
+  // Set up IPC listeners - using useCallback to ensure stable function references
   useEffect(() => {
-    if (!songLyric.length) {
-      setIsLoading(true);
-
-      const { url, filePath, isDefault } = queryString.parse(location.search);
-
-      const isDefaultBoolean = isDefault === 'true';
-
-      if (filePath) {
-        api?.getLyricByFilePath(filePath as string, isDefaultBoolean).then(res => {
-          setSongLyric(res);
-          setIsLoading(false);
-        });
-      } else {
-        api?.getLyricByUrlHandle(url as string).then(res => {
-          setSongLyric(res);
-          setIsLoading(false);
-        });
-      }
+    if (!api) {
+      console.log('❌ Lyrics: API not available');
+      return;
     }
 
-    api?.onSlideClicked(slideIndex => setActiveIndex(slideIndex));
-    api?.onSlideClickedIndex(slideIndex => setActiveIndex(slideIndex));
-    api?.onSelectedVideoBackground(video => {
+    console.log('🎧 Lyrics: Setting up IPC listeners. API object: ✅');
+
+    const handleSlideClicked = (slideIndex: number) => {
+      console.log('👆 Lyrics: Received slide clicked:', slideIndex);
+      setActiveIndex(slideIndex);
+    };
+
+    const handleSlideClickedIndex = (slideIndex: number) => {
+      console.log('👆 Lyrics: Received slide clicked index:', slideIndex);
+      setActiveIndex(slideIndex);
+    };
+
+    const handleSelectedVideoBackground = (video: string) => {
+      console.log('🎥 Lyrics: Received video background update:', video);
       setVideoBackgroundPath(video);
       if (video) {
+        console.log('✅ Lyrics: Clearing custom background because video was selected');
         setCustomBackground(''); // Clear custom background when video is selected
       }
-    });
+    };
 
-    // Listen for custom background (colors/gradients)
-    api?.onCustomBackground?.(background => {
-      setCustomBackground(background);
+    const handleThemeUpdate = (themeData: any) => {
+      console.log('🎨 Lyrics: Received theme update:', themeData);
+
+      setCurrentTheme(prev => {
+        console.log('🎨 Lyrics: Current theme before update:', prev);
+
+        const newTheme = {
+          // Keep the existing ID and other properties from prev
+          id: prev?.id || 'custom',
+          name: prev?.name || 'Custom',
+          is_default: prev?.is_default || false,
+          created_at: prev?.created_at || new Date().toISOString(),
+          // Map the new properties - use incoming data first
+          font_family: themeData.fontFamily || prev?.font_family || 'Montserrat',
+          font_size: themeData.fontSize || prev?.font_size || 48,
+          font_weight: themeData.fontWeight || prev?.font_weight || 600,
+          text_color: themeData.textColor || prev?.text_color || '#FFFFFF',
+          text_shadow: themeData.textShadow || prev?.text_shadow || '2px 2px 4px rgba(0,0,0,0.5)',
+          text_outline: prev?.text_outline || 'none',
+          background_position: prev?.background_position || 'center',
+          animation_type: themeData.animationType || prev?.animation_type || 'fade',
+        } as Theme;
+
+        console.log('🎨 Lyrics: New theme after merge:', newTheme);
+        return newTheme;
+      });
+    };
+
+    const handleCustomBackground = (background: any) => {
+      console.log('🌈 Lyrics: Received custom background update:', background);
       if (background) {
+        console.log('✅ Lyrics: Setting custom background to:', background);
+        setCustomBackground(background);
         setVideoBackgroundPath(''); // Clear video when custom background is set
+      } else {
+        console.log('⚠️ Lyrics: Clearing custom background');
+        setCustomBackground('');
       }
-    });
+    };
 
-    // Listen for theme updates from settings window
-    api?.onThemeUpdate?.(themeData => {
-      setCurrentTheme({
-        ...currentTheme,
-        font_family: themeData.fontFamily,
-        font_size: themeData.fontSize,
-        font_weight: themeData.fontWeight,
-        text_color: themeData.textColor,
-        text_shadow: themeData.textShadow,
-        animation_type: themeData.animationType,
-      } as Theme);
-    });
+    // Store cleanup functions returned by listeners
+    console.log('📡 Lyrics: Registering IPC event listeners...');
+    const cleanupSlideClicked = api.onSlideClicked?.(handleSlideClicked);
+    const cleanupSlideClickedIndex = api.onSlideClickedIndex?.(handleSlideClickedIndex);
+    const cleanupSelectedVideoBackground = api.onSelectedVideoBackground?.(handleSelectedVideoBackground);
+    const cleanupThemeUpdate = api.onThemeUpdate?.(handleThemeUpdate);
+    const cleanupCustomBackground = api.onCustomBackground?.(handleCustomBackground);
 
+    console.log('✅ Lyrics: All IPC listeners registered successfully');
+
+    return () => {
+      console.log('🧹 Lyrics: Cleaning up IPC listeners');
+      // Call cleanup functions
+      if (typeof cleanupSlideClicked === 'function') cleanupSlideClicked();
+      if (typeof cleanupSlideClickedIndex === 'function') cleanupSlideClickedIndex();
+      if (typeof cleanupSelectedVideoBackground === 'function') cleanupSelectedVideoBackground();
+      if (typeof cleanupThemeUpdate === 'function') cleanupThemeUpdate();
+      if (typeof cleanupCustomBackground === 'function') cleanupCustomBackground();
+    };
+  }, [api]); // Only re-run if api changes
+
+  // Keyboard navigation
+  useEffect(() => {
     const handleKeyDown = event => {
       if (event.keyCode === 37) {
         // Left arrow
@@ -120,19 +254,31 @@ function LyricsDisplayPage() {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [songLyric.length]);
+  }, [activeIndex, songLyric.length]);
 
   useEffect(() => {
     const loadVideo = async () => {
       if (videoBackgroundPath) {
+        console.log('🎥 Lyrics: Loading video from path:', videoBackgroundPath);
         const base64Video = await api?.getVideoBase64(videoBackgroundPath);
         setVideoSrcBlog(base64Video);
       } else {
+        console.log('🎥 Lyrics: Clearing video background.');
         setVideoSrcBlog('');
       }
     };
     loadVideo();
   }, [videoBackgroundPath]);
+
+  // Debug: Log when theme changes
+  useEffect(() => {
+    console.log('🔄 Lyrics: Theme state changed:', currentTheme);
+  }, [currentTheme]);
+
+  // Debug: Log when activeIndex changes
+  useEffect(() => {
+    console.log('🔄 Lyrics: Active index changed:', activeIndex);
+  }, [activeIndex]);
 
   // Get animation variant based on theme
   const getAnimationVariant = (animationType: string) => {
@@ -180,6 +326,10 @@ function LyricsDisplayPage() {
   const animation = currentTheme
     ? getAnimationVariant(currentTheme.animation_type)
     : getAnimationVariant('fade');
+
+  // Debug: Log text style on render
+  console.log('🎨 Lyrics: Rendering with textStyle:', textStyle);
+  console.log('🎨 Lyrics: Current activeIndex:', activeIndex);
 
   return (
     <Fragment>
@@ -298,8 +448,8 @@ function LyricsDisplayPage() {
             transition={{ delay: 1 }}
             className='absolute bottom-8 right-8 z-20'>
             <div className='rounded-2xl border border-white/10 bg-black/30 p-4 backdrop-blur-sm'>
-              {customLogo ? (
-                <img src={customLogo} alt='Logo' className='h-12 w-12 object-contain' />
+              {logoPath ? (
+                <img src={logoPath} alt='Logo' className='h-16 w-16 object-contain' />
               ) : (
                 <Music2 className='h-12 w-12 text-white/70' />
               )}

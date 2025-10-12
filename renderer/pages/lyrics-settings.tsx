@@ -2,10 +2,11 @@ import React, { Fragment, useEffect, useState } from 'react';
 import Head from 'next/head';
 import queryString from 'query-string';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronRight, Palette, Type, Video, Play, Image as ImageIcon, Droplet } from 'lucide-react';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from 'components/ui/select';
-import { Label } from 'components/ui/label';
-import { Input } from 'components/ui/input';
+import { ChevronRight, Palette, Type, Video, Play, Image as ImageIcon, Droplet, Sparkles, BookOpen } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import { Label } from '../components/ui/label';
+import { Input } from '../components/ui/input';
+import { Button } from '../components/ui/button';
 import { getAllThemes } from '../lib/supabase-service';
 import type { Theme } from '../lib/supabase';
 
@@ -28,7 +29,7 @@ function LyricsDisplaySettingsPage() {
   const [songLyric, setSongLyric] = useState([]);
   const [backgroundVideos, setBackgroundVideos] = useState([]);
   const [documentsPath, setDocumentsPath] = useState('');
-  const [windowId, setWindowId] = useState(2);
+  const [windowId, setWindowId] = useState<number | null>(null);
   const [activeSlideIndex, setActiveSlideIndex] = useState(0);
   const [themes, setThemes] = useState<Theme[]>([]);
   const [selectedThemeId, setSelectedThemeId] = useState<string>('');
@@ -45,54 +46,122 @@ function LyricsDisplaySettingsPage() {
   const [logoImage, setLogoImage] = useState<string>('');
 
   const handleSlideClick = (index: number) => {
+    console.log('🖱️ Control: Slide clicked. Index:', index, 'WindowId:', windowId);
     setActiveSlideIndex(index);
-    api?.setActiveSlide(windowId, index);
-    api?.focusTargetWindow(windowId);
+    if (windowId) {
+      console.log('📤 Control: Sending setActiveSlide to windowId:', windowId, 'index:', index);
+      api?.setActiveSlide(windowId, index);
+      api?.focusTargetWindow(windowId);
+    } else {
+      console.error('❌ Control: Cannot send slide click - windowId is null');
+    }
   };
 
   // Load themes
   useEffect(() => {
-    const loadThemes = async () => {
+    const loadThemesAndSettings = async () => {
       try {
         const themesData = await getAllThemes();
         setThemes(themesData);
-        const defaultTheme = themesData.find(t => t.is_default) || themesData[0];
-        if (defaultTheme) {
-          setSelectedThemeId(defaultTheme.id);
-          setFontSize(defaultTheme.font_size);
-          applyTheme(defaultTheme);
+
+        const savedSelectedThemeId = await api?.getSetting('selectedThemeId');
+        const savedFontSize = await api?.getSetting('fontSize');
+        const savedVideoBackgroundPath = await api?.getSetting('videoBackgroundPath');
+        const savedBackgroundType = await api?.getSetting('backgroundType');
+        const savedSolidColor = await api?.getSetting('solidColor');
+        const savedGradientStart = await api?.getSetting('gradientStart');
+        const savedGradientEnd = await api?.getSetting('gradientEnd');
+        const savedBackgroundImage = await api?.getSetting('backgroundImage');
+        const savedLogoImage = await api?.getSetting('customLogo');
+
+        console.log('⚙️ Control: Loaded settings:', {
+          savedSelectedThemeId,
+          savedFontSize,
+          savedVideoBackgroundPath,
+          savedBackgroundType,
+          savedSolidColor,
+          savedGradientStart,
+          savedGradientEnd,
+          savedBackgroundImage,
+          savedLogoImage,
+        });
+
+        let initialTheme: Theme | undefined;
+
+        if (savedSelectedThemeId) {
+          initialTheme = themesData.find(t => t.id === savedSelectedThemeId);
         }
+
+        if (!initialTheme) {
+          initialTheme = themesData.find(t => t.is_default) || themesData[0];
+        }
+
+        if (initialTheme) {
+          if (savedFontSize !== undefined) {
+            initialTheme = { ...initialTheme, font_size: savedFontSize };
+          }
+          setSelectedThemeId(initialTheme.id);
+          setFontSize(initialTheme.font_size);
+
+          // WAIT for windowId to be set before applying theme
+          // It will be applied automatically via useEffect when windowId changes
+          console.log('⏰ Control: Delaying theme application until windowId is set');
+        }
+
+        if (savedVideoBackgroundPath) {
+          selectVideoBackground(savedVideoBackgroundPath);
+          setBackgroundType('video');
+        }
+
+        if (savedBackgroundType) setBackgroundType(savedBackgroundType);
+        if (savedSolidColor) setSolidColor(savedSolidColor);
+        if (savedGradientStart) setGradientStart(savedGradientStart);
+        if (savedGradientEnd) setGradientEnd(savedGradientEnd);
+        if (savedBackgroundImage) setBackgroundImage(savedBackgroundImage);
+        if (savedLogoImage) setLogoImage(savedLogoImage);
+
       } catch (error) {
-        console.error('Error loading themes:', error);
+        console.error('Error loading themes or settings:', error);
       }
     };
-    loadThemes();
+    loadThemesAndSettings();
   }, []);
 
   const applyTheme = (theme: Theme) => {
+    console.log('🎨 Control: Applying theme:', theme.name, theme);
     setFontSize(theme.font_size);
-    api?.updateLyricsTheme?.(windowId, {
-      fontFamily: theme.font_family,
-      fontSize: theme.font_size,
-      fontWeight: theme.font_weight,
-      textColor: theme.text_color,
-      textShadow: theme.text_shadow,
-      animationType: theme.animation_type,
-    });
+    if (windowId) {
+      console.log('📤 Control: Sending updateLyricsTheme to windowId:', windowId);
+      api?.updateLyricsTheme?.(windowId, {
+        fontFamily: theme.font_family,
+        fontSize: theme.font_size,
+        fontWeight: theme.font_weight,
+        textColor: theme.text_color,
+        textShadow: theme.text_shadow,
+        animationType: theme.animation_type,
+      });
+    } else {
+      console.error('❌ Control: Cannot apply theme - windowId is null');
+    }
   };
 
-  const handleThemeChange = (themeId: string) => {
+  const handleThemeChange = async (themeId: string) => {
+    console.log('🎨 Control: Theme changed to:', themeId);
     setSelectedThemeId(themeId);
     const theme = themes.find(t => t.id === themeId);
     if (theme) {
       applyTheme(theme);
+      await api?.setSetting('selectedThemeId', themeId);
+      await api?.setSetting('fontSize', theme.font_size);
     }
   };
 
-  const handleFontSizeChange = (value: number) => {
+  const handleFontSizeChange = async (value: number) => {
+    console.log('📏 Control: Font size changed to:', value, 'WindowId:', windowId);
     setFontSize(value);
     const theme = themes.find(t => t.id === selectedThemeId);
-    if (theme) {
+    if (theme && windowId) {
+      console.log('📤 Control: Sending font size update. Theme:', theme.name, 'Size:', value);
       api?.updateLyricsTheme?.(windowId, {
         fontFamily: theme.font_family,
         fontSize: value,
@@ -101,11 +170,18 @@ function LyricsDisplaySettingsPage() {
         textShadow: theme.text_shadow,
         animationType: theme.animation_type,
       });
+      await api?.setSetting('fontSize', value);
+    } else {
+      console.error('❌ Control: Cannot update font size - theme or windowId is null. Theme:', theme, 'WindowId:', windowId);
     }
   };
 
-  const selectVideoBackground = (value: string) => {
-    api?.selectVideoBackground(windowId, value);
+  const selectVideoBackground = async (value: string) => {
+    console.log('🎥 Control: Video background selected:', value);
+    if (windowId) {
+      api?.selectVideoBackground(windowId, value);
+      await api?.setSetting('videoBackgroundPath', value);
+    }
   };
 
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -115,6 +191,7 @@ function LyricsDisplaySettingsPage() {
       reader.onloadend = () => {
         const base64Image = reader.result as string;
         setBackgroundImage(base64Image);
+        console.log('🖼️ Control: Image background uploaded:', base64Image.substring(0, 50) + '...');
       };
       reader.readAsDataURL(file);
     }
@@ -129,6 +206,7 @@ function LyricsDisplaySettingsPage() {
         setLogoImage(base64Logo);
         // Save to settings
         api?.setSetting('customLogo', base64Logo);
+        console.log('🖼️ Control: Custom logo uploaded:', base64Logo.substring(0, 50) + '...');
       };
       reader.readAsDataURL(file);
     }
@@ -136,28 +214,69 @@ function LyricsDisplaySettingsPage() {
 
   // Apply background based on type
   useEffect(() => {
-    if (windowId === 2) return; // Wait for window ID to be set
+    // Skip if windowId hasn't been set yet
+    if (!windowId) {
+      console.log('⏸️ Control: Waiting for window ID to be set. Current:', windowId);
+      return;
+    }
+
+    console.log('🌈 Control: Applying background type:', backgroundType, 'to windowId:', windowId);
+    api?.setSetting('backgroundType', backgroundType);
 
     switch (backgroundType) {
       case 'none':
+        console.log('🌈 Control: Setting background to none.');
         api?.selectVideoBackground(windowId, '');
         api?.setCustomBackground(windowId, '');
+        api?.setSetting('videoBackgroundPath', '');
+        api?.setSetting('solidColor', '');
+        api?.setSetting('gradientStart', '');
+        api?.setSetting('gradientEnd', '');
+        api?.setSetting('backgroundImage', '');
         break;
       case 'color':
+        console.log('🌈 Control: Setting solid color background:', solidColor);
+        console.log('🔍 Control: Calling setCustomBackground with windowId:', windowId, 'color:', solidColor);
         api?.setCustomBackground(windowId, solidColor);
+        console.log('🔍 Control: Calling selectVideoBackground to clear video');
         api?.selectVideoBackground(windowId, ''); // Clear video
+        api?.setSetting('solidColor', solidColor);
+        api?.setSetting('videoBackgroundPath', '');
+        api?.setSetting('gradientStart', '');
+        api?.setSetting('gradientEnd', '');
+        api?.setSetting('backgroundImage', '');
         break;
       case 'gradient':
-        api?.setCustomBackground(windowId, `linear-gradient(135deg, ${gradientStart}, ${gradientEnd})`);
+        const gradient = `linear-gradient(135deg, ${gradientStart}, ${gradientEnd})`;
+        console.log('🌈 Control: Setting gradient background:', gradient);
+        api?.setCustomBackground(windowId, gradient);
         api?.selectVideoBackground(windowId, ''); // Clear video
+        api?.setSetting('gradientStart', gradientStart);
+        api?.setSetting('gradientEnd', gradientEnd);
+        api?.setSetting('videoBackgroundPath', '');
+        api?.setSetting('solidColor', '');
+        api?.setSetting('backgroundImage', '');
         break;
       case 'video':
+        console.log('🌈 Control: Video background type selected.');
         api?.setCustomBackground(windowId, ''); // Clear custom background
+        api?.setSetting('videoBackgroundPath', ''); // This will be set by selectVideoBackground
+        api?.setSetting('solidColor', '');
+        api?.setSetting('gradientStart', '');
+        api?.setSetting('gradientEnd', '');
+        api?.setSetting('backgroundImage', '');
         break;
       case 'image':
         if (backgroundImage) {
-          api?.setCustomBackground(windowId, `url(${backgroundImage}) center/cover no-repeat`);
+          const imageBg = `url(${backgroundImage}) center/cover no-repeat`;
+          console.log('🌈 Control: Setting image background:', imageBg.substring(0, 50) + '...');
+          api?.setCustomBackground(windowId, imageBg);
           api?.selectVideoBackground(windowId, ''); // Clear video
+          api?.setSetting('backgroundImage', backgroundImage);
+          api?.setSetting('videoBackgroundPath', '');
+          api?.setSetting('solidColor', '');
+          api?.setSetting('gradientStart', '');
+          api?.setSetting('gradientEnd', '');
         }
         break;
     }
@@ -175,11 +294,18 @@ function LyricsDisplaySettingsPage() {
     api?.onLoadedLyrics(handleLoadedLyrics);
   }, []); // Empty deps - run only once
 
-  // Set up window ID and paths
+  // Set up window ID and paths - MUST RUN FIRST
   useEffect(() => {
     const { windowid } = queryString.parse(location.search);
-    console.log('🪟 Settings: Window ID set to:', windowid);
-    setWindowId(Number(windowid));
+    const parsedWindowId = Number(windowid);
+    console.log('🪟 Settings: Window ID from URL:', windowid, '-> parsed:', parsedWindowId);
+
+    if (parsedWindowId && !isNaN(parsedWindowId)) {
+      setWindowId(parsedWindowId);
+      console.log('✅ Settings: Window ID successfully set to:', parsedWindowId);
+    } else {
+      console.error('❌ Settings: Invalid window ID:', windowid);
+    }
 
     api?.getPath('documents').then(path => {
       const videosPath = `${path}/lyrics-slide-show/videos`;
@@ -195,6 +321,17 @@ function LyricsDisplaySettingsPage() {
       }
     });
   }, []);
+
+  // Apply saved theme when windowId becomes available
+  useEffect(() => {
+    if (windowId && selectedThemeId && themes.length > 0) {
+      const theme = themes.find(t => t.id === selectedThemeId);
+      if (theme) {
+        console.log('🎨 Control: WindowId now available, applying saved theme:', theme.name);
+        applyTheme(theme);
+      }
+    }
+  }, [windowId]); // Only run when windowId changes
 
   // Keyboard navigation
   useEffect(() => {
@@ -548,8 +685,7 @@ function LyricsDisplaySettingsPage() {
                     if (verses && verses.length > 0) {
                       // Here you would typically add these verses to the presentation
                       console.log('Suggested Bible Verses:', verses);
-                      alert('Versículos sugeridos (veja no console):
-' + JSON.stringify(verses, null, 2));
+                      alert('Versículos sugeridos (veja no console):\n' + JSON.stringify(verses, null, 2));
                     }
                   }}
                   className='w-full bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600'>
@@ -558,81 +694,6 @@ function LyricsDisplaySettingsPage() {
                 </Button>
               </motion.div>
             )}
-          </div>
-        </div>
-
-        {/* Main - Slides Grid */}
-        <div className='flex-1 overflow-hidden'>
-          <div className='h-full p-6'>
-            <div className='mb-4 flex items-center justify-between'>
-              <div className='flex items-center gap-2'>
-                <Play className='h-5 w-5 text-purple-400' />
-                <h2 className='text-lg font-semibold text-white'>
-                  Slides {songLyric.length > 0 && `(${songLyric.length})`}
-                </h2>
-              </div>
-              {activeSlideIndex >= 0 && songLyric.length > 0 && (
-                <div className='text-sm text-slate-400'>
-                  Slide {activeSlideIndex + 1} de {songLyric.length}
-                </div>
-              )}
-            </div>
-
-            {songLyric.length === 0 ? (
-              <div className='flex h-[calc(100%-4rem)] items-center justify-center rounded-2xl border border-white/10 bg-white/5'>
-                <div className='text-center'>
-                  <Play className='mx-auto h-16 w-16 text-slate-600' />
-                  <p className='mt-4 text-slate-400'>Aguardando letras...</p>
-                </div>
-              </div>
-            ) : (
-              <div className='h-[calc(100%-4rem)] overflow-y-auto'>
-                <div className='grid grid-cols-3 gap-4 pb-4'>
-                  {songLyric?.map?.((lyr, index) => (
-                    <motion.div
-                      key={index}
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ duration: 0.2, delay: index * 0.02 }}
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      onClick={() => handleSlideClick(index)}
-                      className={`group relative cursor-pointer overflow-hidden rounded-xl border p-4 transition-all ${
-                        activeSlideIndex === index
-                          ? 'border-purple-500 bg-purple-500/10 shadow-lg shadow-purple-500/20'
-                          : 'border-white/10 bg-white/5 hover:border-purple-500/50 hover:bg-white/10'
-                      }`}>
-                      <div className='flex min-h-[140px] flex-col justify-between'>
-                        <div className='mb-3 flex-1'>
-                          <p className='line-clamp-5 text-sm leading-relaxed text-slate-300'>
-                            {lyr}
-                          </p>
-                        </div>
-                        <div className='flex items-center justify-between'>
-                          <span
-                            className={`text-xs font-semibold ${
-                              activeSlideIndex === index ? 'text-purple-400' : 'text-slate-500'
-                            }`}>
-                            #{index + 1}
-                          </span>
-                          {activeSlideIndex === index && (
-                            <ChevronRight className='h-4 w-4 text-purple-400' />
-                          )}
-                        </div>
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </Fragment>
-  );
-}
-
-export default LyricsDisplaySettingsPage;
           </div>
         </div>
 

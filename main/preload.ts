@@ -108,4 +108,67 @@ contextBridge.exposeInMainWorld('api', {
   reportRendererError: (errorDetails: any) => {
     ipcRenderer.send('renderer-error', errorDetails);
   },
+
+  // Video Player
+  openVideoPlayerWindow: () => {
+    ipcRenderer.send('open-video-player-window');
+  },
+  playVideo: () => {
+    ipcRenderer.send('video-play');
+  },
+  pauseVideo: () => {
+    ipcRenderer.send('video-pause');
+  },
+  stopVideo: () => {
+    ipcRenderer.send('video-stop');
+  },
+  seekVideo: ({ time }: { time: number }) => {
+    ipcRenderer.send('video-seek', { time });
+  },
+  setVideoVolume: ({ volume }: { volume: number }) => {
+    ipcRenderer.send('video-volume', { volume });
+  },
+  loadVideoInPlayer: ({ url }: { url: string }) => {
+    ipcRenderer.send('load-video', { url });
+  },
+  sendVideoTimeUpdate: ({ currentTime, duration }: { currentTime: number; duration: number }) => {
+    ipcRenderer.send('video-time-update', { currentTime, duration });
+  },
+
+  // Video Player Event Listeners
+  onVideoPlay: (callback: () => void) => {
+    const listener = () => callback();
+    ipcRenderer.on('video-play', listener);
+    return () => ipcRenderer.removeListener('video-play', listener);
+  },
+  onVideoPause: (callback: () => void) => {
+    const listener = () => callback();
+    ipcRenderer.on('video-pause', listener);
+    return () => ipcRenderer.removeListener('video-pause', listener);
+  },
+  onVideoStop: (callback: () => void) => {
+    const listener = () => callback();
+    ipcRenderer.on('video-stop', listener);
+    return () => ipcRenderer.removeListener('video-stop', listener);
+  },
+  onVideoSeek: (callback: (event: any, data: { time: number }) => void) => {
+    const listener = (_: IpcRendererEvent, data: { time: number }) => callback(_, data);
+    ipcRenderer.on('video-seek', listener);
+    return () => ipcRenderer.removeListener('video-seek', listener);
+  },
+  onVideoVolume: (callback: (event: any, data: { volume: number }) => void) => {
+    const listener = (_: IpcRendererEvent, data: { volume: number }) => callback(_, data);
+    ipcRenderer.on('video-volume', listener);
+    return () => ipcRenderer.removeListener('video-volume', listener);
+  },
+  onLoadVideo: (callback: (event: any, data: { url: string }) => void) => {
+    const listener = (_: IpcRendererEvent, data: { url: string }) => callback(_, data);
+    ipcRenderer.on('load-video', listener);
+    return () => ipcRenderer.removeListener('load-video', listener);
+  },
+  onVideoTimeUpdate: (callback: (event: any, data: { currentTime: number; duration: number }) => void) => {
+    const listener = (_: IpcRendererEvent, data: { currentTime: number; duration: number }) => callback(_, data);
+    ipcRenderer.on('video-time-update', listener);
+    return () => ipcRenderer.removeListener('video-time-update', listener);
+  },
 });

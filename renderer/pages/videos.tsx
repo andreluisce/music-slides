@@ -111,15 +111,15 @@ export default function Videos() {
         <title>Vídeos - Lyrics Slideshow</title>
       </Head>
 
-      <div className='p-8'>
+      <div className='p-4'>
         {/* Header */}
-        <div className='mb-8'>
-          <h1 className='text-3xl font-bold text-white'>Vídeos de Fundo</h1>
-          <p className='mt-2 text-slate-400'>Gerencie seus vídeos de fundo para apresentações</p>
+        <div className='mb-4'>
+          <h1 className='text-xl font-bold text-white'>Vídeos de Fundo</h1>
+          <p className='mt-1 text-xs text-slate-400'>Gerencie seus vídeos de fundo para apresentações</p>
         </div>
 
         {/* Actions Bar */}
-        <div className='mb-6'>
+        <div className='mb-3 flex gap-2'>
           <input
             ref={fileInputRef}
             type='file'
@@ -129,19 +129,27 @@ export default function Videos() {
           />
           <Button
             onClick={handleUploadClick}
+            size='sm'
             disabled={isUploading}
             className='bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700'>
             {isUploading ? (
               <>
-                <Loader2 className='mr-2 h-4 w-4 animate-spin' />
+                <Loader2 className='mr-1.5 h-3.5 w-3.5 animate-spin' />
                 Enviando {uploadProgress > 0 && `${uploadProgress}%`}
               </>
             ) : (
               <>
-                <Upload className='mr-2 h-4 w-4' />
+                <Upload className='mr-1.5 h-3.5 w-3.5' />
                 Fazer Upload
               </>
             )}
+          </Button>
+          <Button
+            onClick={() => api?.openVideoPlayerWindow?.()}
+            size='sm'
+            className='bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700'>
+            <Play className='mr-1.5 h-3.5 w-3.5' />
+            Abrir Video Player
           </Button>
         </div>
 
@@ -151,58 +159,61 @@ export default function Videos() {
             <div className='text-slate-400'>Carregando...</div>
           </div>
         ) : videos.length === 0 ? (
-          <div className='flex h-96 flex-col items-center justify-center rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm'>
-            <VideoIcon className='h-16 w-16 text-slate-600' />
-            <h3 className='mt-4 text-lg font-semibold text-white'>Nenhum vídeo encontrado</h3>
-            <p className='mt-2 text-center text-sm text-slate-400'>
+          <div className='flex h-64 flex-col items-center justify-center rounded-lg border border-white/10 bg-white/5 backdrop-blur-sm'>
+            <VideoIcon className='h-12 w-12 text-slate-600' />
+            <h3 className='mt-3 text-sm font-semibold text-white'>Nenhum vídeo encontrado</h3>
+            <p className='mt-1.5 text-center text-xs text-slate-400'>
               Faça upload de vídeos para usar como fundo
               <br />
               nas suas apresentações
             </p>
             <Button
               onClick={handleUploadClick}
-              className='mt-6 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700'>
-              <Upload className='mr-2 h-4 w-4' />
+              size='sm'
+              className='mt-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700'>
+              <Upload className='mr-1.5 h-3.5 w-3.5' />
               Fazer Upload de Vídeo
             </Button>
           </div>
         ) : (
-          <div className='grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3'>
+          <div className='grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3'>
             {videos.map((video, index) => (
               <motion.div
                 key={video.id}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3, delay: index * 0.05 }}
-                className='group rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-white/10 p-4 transition-all hover:border-purple-500/50 hover:from-purple-500/10 hover:to-pink-500/10 hover:shadow-lg hover:shadow-purple-500/20'>
-                <div className='relative aspect-video overflow-hidden rounded-lg bg-black'>
+                className='group rounded-lg border border-white/10 bg-gradient-to-br from-white/5 to-white/10 p-3 transition-all hover:border-purple-500/50 hover:from-purple-500/10 hover:to-pink-500/10 hover:shadow-lg hover:shadow-purple-500/20'>
+                <div className='relative aspect-video overflow-hidden rounded-md bg-black'>
                   <video
                     src={video.url}
                     className='h-full w-full object-cover'
                     muted
+                    loop
+                    playsInline
                     onMouseEnter={(e) => e.currentTarget.play()}
                     onMouseLeave={(e) => {
                       e.currentTarget.pause();
                       e.currentTarget.currentTime = 0;
                     }}
                   />
-                  <div className='absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 transition-opacity group-hover:opacity-100'>
-                    <Play className='h-12 w-12 text-white' />
+                  <div className='absolute inset-0 flex items-center justify-center bg-black/30 opacity-100 transition-opacity group-hover:opacity-0 pointer-events-none'>
+                    <Play className='h-8 w-8 text-white drop-shadow-lg' />
                   </div>
                 </div>
-                <div className='mt-3'>
-                  <h3 className='truncate font-semibold text-white'>{video.name}</h3>
-                  <p className='mt-1 text-xs text-slate-500'>
+                <div className='mt-2'>
+                  <h3 className='truncate text-sm font-semibold text-white'>{video.name}</h3>
+                  <p className='mt-0.5 text-xs text-slate-500'>
                     {new Date(video.created_at).toLocaleDateString('pt-BR')}
                   </p>
                 </div>
-                <div className='mt-3 flex gap-2'>
+                <div className='mt-2 flex gap-1.5'>
                   <Button
                     onClick={() => handleDeleteVideo(video)}
                     size='sm'
                     variant='outline'
                     className='w-full border-red-500/20 bg-red-500/5 text-red-400 hover:bg-red-500/10'>
-                    <Trash2 className='mr-2 h-4 w-4' />
+                    <Trash2 className='mr-1.5 h-3.5 w-3.5' />
                     Deletar
                   </Button>
                 </div>

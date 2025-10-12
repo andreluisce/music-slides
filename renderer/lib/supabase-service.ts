@@ -92,6 +92,49 @@ export async function searchSongs(query: string) {
   return data;
 }
 
+/**
+ * Search for a song by exact artist and title
+ */
+export async function searchSongByArtistAndTitle(artist: string, title: string) {
+  const { data, error } = await supabase
+    .from('songs')
+    .select('*')
+    .ilike('artist', artist)
+    .ilike('title', title)
+    .single();
+
+  if (error) {
+    console.error('Error searching song by artist and title:', error);
+    return null;
+  }
+
+  return data;
+}
+
+/**
+ * Search for songs with fuzzy matching (case-insensitive, partial match)
+ */
+export async function searchSongsFuzzy(artist?: string, title?: string) {
+  let query = supabase.from('songs').select('*');
+
+  if (artist) {
+    query = query.ilike('artist', `%${artist}%`);
+  }
+
+  if (title) {
+    query = query.ilike('title', `%${title}%`);
+  }
+
+  const { data, error } = await query.order('created_at', { ascending: false }).limit(10);
+
+  if (error) {
+    console.error('Error searching songs fuzzy:', error);
+    return [];
+  }
+
+  return data;
+}
+
 // ========== VIDEO BACKGROUNDS ==========
 
 export async function getAllVideoBackgrounds() {
@@ -205,10 +248,84 @@ export async function deleteTheme(id: string) {
     .delete()
     .eq('id', id);
 
-  if (error) {
-    console.error('Error deleting theme:', error);
-    throw error;
+    return true;
+
   }
 
-  return true;
-}
+  
+
+  // ========== PRESENTATIONS ========== 
+
+  
+
+  export async function getLastCreatedPresentation() {
+
+    const { data, error } = await supabase
+
+      .from('presentations')
+
+      .select('*')
+
+      .order('created_at', { ascending: false })
+
+      .limit(1)
+
+      .single();
+
+  
+
+    if (error) {
+
+      console.error('Error fetching last created presentation:', error);
+
+      return null;
+
+    }
+
+  
+
+    return data;
+
+  }
+
+  
+
+  // ========== MOST USED SONGS (Placeholder) ========== 
+
+  
+
+  export async function getMostUsedSongs() {
+
+    // In a real application, this would involve more complex queries
+
+    // to presentation_items and presentation_history tables to calculate usage frequency.
+
+    // For now, returning a few hardcoded songs as a placeholder.
+
+    const { data, error } = await supabase
+
+      .from('songs')
+
+      .select('*')
+
+      .limit(5);
+
+  
+
+    if (error) {
+
+      console.error('Error fetching most used songs:', error);
+
+      return [];
+
+    }
+
+  
+
+    return data;
+
+  }
+
+  
+
+  

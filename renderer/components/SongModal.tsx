@@ -105,7 +105,6 @@ export default function SongModal({ isOpen, onClose, onSave, song }: SongModalPr
                 id='title'
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder='Ex: Amazing Grace'
                 className='mt-1 border-white/20 bg-white/10 text-white placeholder:text-slate-400'
               />
             </div>
@@ -119,7 +118,6 @@ export default function SongModal({ isOpen, onClose, onSave, song }: SongModalPr
                 id='artist'
                 value={artist}
                 onChange={(e) => setArtist(e.target.value)}
-                placeholder='Ex: Chris Tomlin'
                 className='mt-1 border-white/20 bg-white/10 text-white placeholder:text-slate-400'
               />
             </div>

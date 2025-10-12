@@ -63,20 +63,21 @@ export default function Presentations() {
         <title>Apresentações - Lyrics Slideshow</title>
       </Head>
 
-      <div className='p-8'>
+      <div className='p-4'>
         {/* Header */}
-        <div className='mb-8'>
-          <h1 className='text-3xl font-bold text-white'>Apresentações</h1>
-          <p className='mt-2 text-slate-400'>Crie e gerencie suas apresentações</p>
+        <div className='mb-4'>
+          <h1 className='text-xl font-bold text-white'>Apresentações</h1>
+          <p className='mt-1 text-xs text-slate-400'>Crie e gerencie suas apresentações</p>
         </div>
 
         {/* Actions Bar */}
-        <div className='mb-6'>
+        <div className='mb-3'>
           {!isCreating ? (
             <Button
               onClick={() => setIsCreating(true)}
+              size='sm'
               className='bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700'>
-              <Plus className='mr-2 h-4 w-4' />
+              <Plus className='mr-1.5 h-3.5 w-3.5' />
               Nova Apresentação
             </Button>
           ) : (
@@ -86,11 +87,12 @@ export default function Presentations() {
                 value={newPresentationName}
                 onChange={(e) => setNewPresentationName(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleCreatePresentation()}
-                className='max-w-md border-white/20 bg-white/10 text-white placeholder:text-slate-400'
+                className='h-8 max-w-md border-white/20 bg-white/10 text-sm text-white placeholder:text-slate-400'
                 autoFocus
               />
               <Button
                 onClick={handleCreatePresentation}
+                size='sm'
                 disabled={!newPresentationName.trim()}
                 className='bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700'>
                 Criar
@@ -100,6 +102,7 @@ export default function Presentations() {
                   setIsCreating(false);
                   setNewPresentationName('');
                 }}
+                size='sm'
                 variant='outline'
                 className='border-white/20 bg-white/5 text-white hover:bg-white/10'>
                 Cancelar
@@ -114,49 +117,50 @@ export default function Presentations() {
             <div className='text-slate-400'>Carregando...</div>
           </div>
         ) : presentations.length === 0 ? (
-          <div className='flex h-96 flex-col items-center justify-center rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm'>
-            <PresentationIcon className='h-16 w-16 text-slate-600' />
-            <h3 className='mt-4 text-lg font-semibold text-white'>Nenhuma apresentação criada</h3>
-            <p className='mt-2 text-center text-sm text-slate-400'>
+          <div className='flex h-64 flex-col items-center justify-center rounded-lg border border-white/10 bg-white/5 backdrop-blur-sm'>
+            <PresentationIcon className='h-12 w-12 text-slate-600' />
+            <h3 className='mt-3 text-sm font-semibold text-white'>Nenhuma apresentação criada</h3>
+            <p className='mt-1.5 text-center text-xs text-slate-400'>
               Comece criando sua primeira apresentação para organizar
               <br />
               músicas e slides para seus eventos
             </p>
             <Button
               onClick={() => setIsCreating(true)}
-              className='mt-6 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700'>
-              <Plus className='mr-2 h-4 w-4' />
+              size='sm'
+              className='mt-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700'>
+              <Plus className='mr-1.5 h-3.5 w-3.5' />
               Criar Apresentação
             </Button>
           </div>
         ) : (
-          <div className='grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3'>
+          <div className='grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3'>
             {presentations.map((presentation, index) => (
               <motion.div
                 key={presentation.id}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3, delay: index * 0.05 }}
-                className='group rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-white/10 p-6 transition-all hover:border-purple-500/50 hover:from-purple-500/10 hover:to-pink-500/10 hover:shadow-lg hover:shadow-purple-500/20'>
+                className='group rounded-lg border border-white/10 bg-gradient-to-br from-white/5 to-white/10 p-3 transition-all hover:border-purple-500/50 hover:from-purple-500/10 hover:to-pink-500/10 hover:shadow-lg hover:shadow-purple-500/20'>
                 <div className='flex items-start justify-between'>
                   <div className='flex-1'>
-                    <h3 className='text-lg font-semibold text-white'>{presentation.name}</h3>
+                    <h3 className='text-sm font-semibold text-white'>{presentation.name}</h3>
                     {presentation.description && (
-                      <p className='mt-1 text-sm text-slate-400'>{presentation.description}</p>
+                      <p className='mt-0.5 text-xs text-slate-400'>{presentation.description}</p>
                     )}
-                    <p className='mt-3 text-xs text-slate-500'>
+                    <p className='mt-2 text-xs text-slate-500'>
                       Criado em {new Date(presentation.created_at).toLocaleDateString('pt-BR')}
                     </p>
                   </div>
                 </div>
 
-                <div className='mt-4 flex gap-2'>
+                <div className='mt-3 flex gap-1.5'>
                   <Link href={`/presentations/${presentation.id}`} className='flex-1'>
                     <Button
                       variant='outline'
                       size='sm'
                       className='w-full border-white/20 bg-white/5 text-white hover:bg-white/10'>
-                      <Edit className='mr-2 h-4 w-4' />
+                      <Edit className='mr-1.5 h-3.5 w-3.5' />
                       Editar
                     </Button>
                   </Link>
@@ -165,7 +169,7 @@ export default function Presentations() {
                     size='sm'
                     onClick={() => handleDeletePresentation(presentation.id)}
                     className='border-red-500/20 bg-red-500/5 text-red-400 hover:bg-red-500/10'>
-                    <Trash2 className='h-4 w-4' />
+                    <Trash2 className='h-3.5 w-3.5' />
                   </Button>
                 </div>
               </motion.div>

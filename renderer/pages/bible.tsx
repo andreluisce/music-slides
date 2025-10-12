@@ -143,11 +143,11 @@ export default function Bible() {
         <title>Bíblia - Lyrics Slideshow</title>
       </Head>
 
-      <div className='p-8'>
+      <div className='p-4'>
         {/* Header */}
-        <div className='mb-8'>
-          <h1 className='text-3xl font-bold text-white'>Busca Bíblica</h1>
-          <p className='mt-2 text-slate-400'>Pesquise versículos para adicionar às apresentações</p>
+        <div className='mb-4'>
+          <h1 className='text-xl font-bold text-white'>Busca Bíblica</h1>
+          <p className='mt-1 text-xs text-slate-400'>Pesquise versículos para adicionar às apresentações</p>
         </div>
 
         {/* Search Form */}
@@ -155,17 +155,14 @@ export default function Bible() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          className='mb-8 rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur-sm'>
-          <div className='mb-4 flex items-center gap-2'>
-            <Search className='h-6 w-6 text-purple-400' />
-            <h2 className='text-xl font-semibold text-white'>Pesquisar Versículo</h2>
-          </div>
+          className='mb-4 rounded-lg border border-white/10 bg-white/5 p-3 backdrop-blur-sm'>
+          <h2 className='mb-3 text-sm font-semibold text-white'>Pesquisar Versículo</h2>
 
-          <form onSubmit={handleSearch} className='space-y-4'>
-            <div className='grid grid-cols-1 gap-4 md:grid-cols-2'>
+          <form onSubmit={handleSearch} className='space-y-3'>
+            <div className='grid grid-cols-1 gap-3 md:grid-cols-2'>
               {/* Book Selection */}
               <div className='md:col-span-2'>
-                <Label htmlFor='book' className='text-slate-300'>
+                <Label htmlFor='book' className='text-xs text-slate-300'>
                   Livro da Bíblia
                 </Label>
                 <div className='mt-1'>
@@ -183,7 +180,7 @@ export default function Bible() {
 
               {/* Version Selection */}
               <div className='md:col-span-2'>
-                <Label htmlFor='version' className='text-slate-300'>
+                <Label htmlFor='version' className='text-xs text-slate-300'>
                   Versão da Bíblia
                 </Label>
                 <Select value={version} onValueChange={setVersion}>
@@ -205,7 +202,7 @@ export default function Bible() {
 
               {/* Chapter */}
               <div>
-                <Label htmlFor='chapter' className='text-slate-300'>
+                <Label htmlFor='chapter' className='text-xs text-slate-300'>
                   Capítulo
                 </Label>
                 <Input
@@ -215,13 +212,13 @@ export default function Bible() {
                   value={chapter}
                   onChange={(e) => setChapter(e.target.value)}
                   placeholder='Ex: 3'
-                  className='mt-1 border-white/20 bg-white/10 text-white placeholder:text-slate-400'
+                  className='mt-1 h-8 border-white/20 bg-white/10 text-sm text-white placeholder:text-slate-400'
                 />
               </div>
 
               {/* Verse */}
               <div>
-                <Label htmlFor='verse' className='text-slate-300'>
+                <Label htmlFor='verse' className='text-xs text-slate-300'>
                   Versículo (opcional)
                 </Label>
                 <Input
@@ -230,25 +227,26 @@ export default function Bible() {
                   value={verse}
                   onChange={(e) => setVerse(e.target.value)}
                   placeholder='Ex: 16 ou 1-5'
-                  className='mt-1 border-white/20 bg-white/10 text-white placeholder:text-slate-400'
+                  className='mt-1 h-8 border-white/20 bg-white/10 text-sm text-white placeholder:text-slate-400'
                 />
               </div>
             </div>
 
             {/* Search Button */}
-            <div className='flex gap-3'>
+            <div className='flex gap-2'>
               <Button
                 type='submit'
+                size='sm'
                 disabled={!book.trim() || !chapter.trim() || isSearching}
                 className='bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700'>
                 {isSearching ? (
                   <>
-                    <Loader2 className='mr-2 h-4 w-4 animate-spin' />
+                    <Loader2 className='mr-1.5 h-3.5 w-3.5 animate-spin' />
                     Buscando...
                   </>
                 ) : (
                   <>
-                    <Search className='mr-2 h-4 w-4' />
+                    <Search className='mr-1.5 h-3.5 w-3.5' />
                     Buscar Versículo
                   </>
                 )}
@@ -256,6 +254,7 @@ export default function Bible() {
               {result && (
                 <Button
                   type='button'
+                  size='sm'
                   variant='outline'
                   onClick={() => setResult(null)}
                   className='border-white/20 bg-white/5 text-white hover:bg-white/10'>
@@ -272,33 +271,35 @@ export default function Bible() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
-            className='rounded-2xl border border-white/10 bg-gradient-to-br from-white/5 to-white/10 p-6 backdrop-blur-sm'>
-            <div className='mb-4 flex items-center gap-2'>
-              <BookOpen className='h-6 w-6 text-pink-400' />
-              <h2 className='text-xl font-semibold text-white'>{result.reference}</h2>
+            className='rounded-lg border border-white/10 bg-gradient-to-br from-white/5 to-white/10 p-3 backdrop-blur-sm'>
+            <div className='mb-3 flex items-center gap-2'>
+              <BookOpen className='h-4 w-4 text-pink-400' />
+              <h2 className='text-sm font-semibold text-white'>{result.reference}</h2>
             </div>
 
-            <div className='space-y-3'>
+            <div className='space-y-2'>
               {Array.isArray(result.text) ? (
                 result.text.map((verse: string, index: number) => (
-                  <p key={index} className='text-lg leading-relaxed text-slate-200'>
-                    <span className='mr-2 font-semibold text-purple-400'>{index + 1}.</span>
+                  <p key={index} className='text-sm leading-relaxed text-slate-200'>
+                    <span className='mr-1.5 font-semibold text-purple-400'>{index + 1}.</span>
                     {verse}
                   </p>
                 ))
               ) : (
-                <p className='text-lg leading-relaxed text-slate-200'>{result.text}</p>
+                <p className='text-sm leading-relaxed text-slate-200'>{result.text}</p>
               )}
             </div>
 
-            <div className='mt-6 flex gap-3'>
+            <div className='mt-3 flex gap-2'>
               <Button
+                size='sm'
                 variant='outline'
                 className='border-purple-500/20 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20'>
-                <BookOpen className='mr-2 h-4 w-4' />
+                <BookOpen className='mr-1.5 h-3.5 w-3.5' />
                 Adicionar à Apresentação
               </Button>
               <Button
+                size='sm'
                 variant='outline'
                 onClick={() => setResult(null)}
                 className='border-white/20 bg-white/5 text-white hover:bg-white/10'>
@@ -314,10 +315,10 @@ export default function Bible() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.2 }}
-            className='flex h-96 flex-col items-center justify-center rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm'>
-            <Book className='h-16 w-16 text-slate-600' />
-            <h3 className='mt-4 text-lg font-semibold text-white'>Nenhuma busca realizada</h3>
-            <p className='mt-2 text-center text-sm text-slate-400'>
+            className='flex h-64 flex-col items-center justify-center rounded-lg border border-white/10 bg-white/5 backdrop-blur-sm'>
+            <Book className='h-12 w-12 text-slate-600' />
+            <h3 className='mt-3 text-sm font-semibold text-white'>Nenhuma busca realizada</h3>
+            <p className='mt-1.5 text-center text-xs text-slate-400'>
               Digite o livro, capítulo e versículo
               <br />
               para buscar na Bíblia

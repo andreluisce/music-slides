@@ -14,14 +14,18 @@ interface ThemeModalProps {
 }
 
 const fontFamilies = [
+  'Open Sans',
+  'Lato',
+  'Roboto',
+  'Plus Jakarta Sans',
+  'DM Sans',
+  'Epilogue',
   'Montserrat',
   'Arial',
   'Helvetica',
   'Times New Roman',
   'Georgia',
   'Bebas Neue',
-  'Roboto',
-  'Open Sans',
 ];
 
 const fontWeights = [
@@ -38,7 +42,7 @@ const animationTypes = ['fade', 'slide', 'zoom', 'none'];
 
 export default function ThemeModal({ isOpen, onClose, onSave, theme }: ThemeModalProps) {
   const [name, setName] = useState('');
-  const [fontFamily, setFontFamily] = useState('Montserrat');
+  const [fontFamily, setFontFamily] = useState('Open Sans');
   const [fontSize, setFontSize] = useState(48);
   const [fontWeight, setFontWeight] = useState(600);
   const [textColor, setTextColor] = useState('#FFFFFF');
@@ -61,7 +65,7 @@ export default function ThemeModal({ isOpen, onClose, onSave, theme }: ThemeModa
       setAnimationType(theme.animation_type);
     } else {
       setName('');
-      setFontFamily('Montserrat');
+      setFontFamily('Open Sans');
       setFontSize(48);
       setFontWeight(600);
       setTextColor('#FFFFFF');
@@ -142,7 +146,6 @@ export default function ThemeModal({ isOpen, onClose, onSave, theme }: ThemeModa
                 id='name'
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder='Ex: Tema Moderno'
                 className='mt-1 border-white/20 bg-white/10 text-white placeholder:text-slate-400'
               />
             </div>
@@ -156,9 +159,9 @@ export default function ThemeModal({ isOpen, onClose, onSave, theme }: ThemeModa
                 id='fontFamily'
                 value={fontFamily}
                 onChange={(e) => setFontFamily(e.target.value)}
-                className='mt-1 w-full rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-white'>
+                className='mt-1 w-full rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-white focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50'>
                 {fontFamilies.map((font) => (
-                  <option key={font} value={font}>
+                  <option key={font} value={font} className='bg-slate-800 text-white'>
                     {font}
                   </option>
                 ))}
@@ -190,9 +193,9 @@ export default function ThemeModal({ isOpen, onClose, onSave, theme }: ThemeModa
                 id='fontWeight'
                 value={fontWeight}
                 onChange={(e) => setFontWeight(Number(e.target.value))}
-                className='mt-1 w-full rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-white'>
+                className='mt-1 w-full rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-white focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50'>
                 {fontWeights.map((weight) => (
-                  <option key={weight.value} value={weight.value}>
+                  <option key={weight.value} value={weight.value} className='bg-slate-800 text-white'>
                     {weight.label}
                   </option>
                 ))}
@@ -243,9 +246,9 @@ export default function ThemeModal({ isOpen, onClose, onSave, theme }: ThemeModa
                 id='animationType'
                 value={animationType}
                 onChange={(e) => setAnimationType(e.target.value)}
-                className='mt-1 w-full rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-white'>
+                className='mt-1 w-full rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-white focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50'>
                 {animationTypes.map((anim) => (
-                  <option key={anim} value={anim}>
+                  <option key={anim} value={anim} className='bg-slate-800 text-white'>
                     {anim}
                   </option>
                 ))}
