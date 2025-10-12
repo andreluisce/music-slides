@@ -11,7 +11,7 @@ export async function initializeStorage() {
   if (!bucketExists) {
     const { data, error } = await supabase.storage.createBucket(BUCKET_NAME, {
       public: true,
-      fileSizeLimit: 524288000, // 500MB
+      fileSizeLimit: 52428800, // 50MB
     });
 
     if (error) {
