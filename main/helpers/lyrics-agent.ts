@@ -39,6 +39,7 @@ export async function intelligentLyricsSearch(
   let title = '';
   let confidence = 0;
 
+  console.time('AI Interpretation');
   try {
     console.log('\n🤖 Step 0: AI Interpretation...');
     const aiInterpretation = await interpretLyricsQuery(userQuery);
@@ -95,12 +96,15 @@ export async function intelligentLyricsSearch(
     console.log('   Parsed Title:', title);
     confidence = 50; // Medium confidence for manual parsing
   }
+  console.timeEnd('AI Interpretation');
 
   // Step 1: Check Supabase cache (cloud)
   console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('1️⃣ LEVEL 1: Supabase Storage Cache');
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.time('Supabase Cache Check');
   const supabaseResult = await searchInSupabase(artist, title);
+  console.timeEnd('Supabase Cache Check');
   if (supabaseResult) {
     console.log('✅ SUCCESS: Found in Supabase cache!');
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
@@ -112,7 +116,9 @@ export async function intelligentLyricsSearch(
   console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('2️⃣ LEVEL 2: Local File System Cache');
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.time('Local Cache Check');
   const localResult = await searchInLocalCache(artist, title);
+  console.timeEnd('Local Cache Check');
   if (localResult) {
     console.log('✅ SUCCESS: Found in local cache!');
     console.log('📤 Uploading to Supabase for future use...');
@@ -126,7 +132,9 @@ export async function intelligentLyricsSearch(
   console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('3️⃣ LEVEL 3: Web Scraping (Playwright)');
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.time('Web Scraping');
   const scrapingResult = await tryWebScraping(artist, title);
+  console.timeEnd('Web Scraping');
   if (scrapingResult) {
     console.log('✅ SUCCESS: Found via web scraping!');
     console.log('💾 Saving to both caches...');
@@ -512,6 +520,9 @@ export async function fastLyricsSearch(
     }
   }
   
+  console.log(`Raw results before deduplication: ${results.length} items`);
+  results.forEach((r, i) => console.log(`  ${i + 1}. ${r.artist} - ${r.title} (${r.source})`));
+
   // Remove duplicates based on title + artist combination
   const uniqueResults = results.filter((result, index, self) => 
     index === self.findIndex(r => 
@@ -537,49 +548,35 @@ export async function fetchLyricsByUrl(
   console.log('🔗 URL:', url);
   console.log('📍 Source:', source);
 
-  // Extract artist from URL (title will be scraped from page)
+  // Check caches first
+  console.log('\n🔍 Checking caches...');
+
+  // Extract artist and title from URL for cache lookup
   const urlParts = url.split('/').filter(Boolean);
-  let artist = urlParts[urlParts.length - 2]?.replace(/-/g, ' ') || '';
-  let title = urlParts[urlParts.length - 1]?.replace(/-/g, ' ').replace(/\.(html|htm)/, '') || '';
-  
-  // For Letras.mus.br, if title looks like a number, we'll get the real title from scraping
-  const isNumberTitle = /^\d+$/.test(title.replace(/\s+/g, ''));
-  if (source === 'letrasmusic' && isNumberTitle) {
-    console.log('   📝 Title appears to be ID, will extract real title from page content');
-    title = 'unknown'; // Will be replaced by scraped title
+  const artistSlug = urlParts[urlParts.length - 2]?.replace(/-/g, ' ') || '';
+  const titleSlug = urlParts[urlParts.length - 1]?.replace(/-/g, ' ').replace(/\.(html|htm)/, '') || '';
+
+  // Check Supabase
+  try {
+    const supabaseResult = await searchInSupabase(artistSlug, titleSlug);
+    if (supabaseResult) {
+      console.log('✅ Found in Supabase cache!');
+      return supabaseResult;
+    }
+  } catch (error) {
+    console.log('⚠️  Supabase check failed:', error.message);
   }
 
-  console.log('   Artist:', artist);
-  console.log('   Title:', title);
-
-  // Check caches first (only if we have a real title, not ID)
-  if (!isNumberTitle) {
-    console.log('\n🔍 Checking caches...');
-
-    // Check Supabase
-    try {
-      const supabaseResult = await searchInSupabase(artist, title);
-      if (supabaseResult) {
-        console.log('✅ Found in Supabase cache!');
-        return supabaseResult;
-      }
-    } catch (error) {
-      console.log('⚠️  Supabase check failed:', error.message);
+  // Check local
+  try {
+    const localResult = await searchInLocalCache(artistSlug, titleSlug);
+    if (localResult) {
+      console.log('✅ Found in local cache!');
+      await saveToSupabase(localResult);
+      return localResult;
     }
-
-    // Check local
-    try {
-      const localResult = await searchInLocalCache(artist, title);
-      if (localResult) {
-        console.log('✅ Found in local cache!');
-        await saveToSupabase(localResult);
-        return localResult;
-      }
-    } catch (error) {
-      console.log('⚠️  Local check failed:', error.message);
-    }
-  } else {
-    console.log('⚠️  Skipping cache check - need to scrape real title first');
+  } catch (error) {
+    console.log('⚠️  Local check failed:', error.message);
   }
 
   // Fetch from web
@@ -587,9 +584,12 @@ export async function fetchLyricsByUrl(
   let result: LyricsSearchResult | null = null;
 
   if (source === 'letrasmusic') {
-    result = await letrasmusic.searchByTitleAndArtist({ artist, title });
+    result = await letrasmusic.scrapeLyricsFromUrl(url);
   } else if (source === 'cifraclub') {
-    result = await cifraclub.searchByTitleAndArtist({ artist, title });
+    // Assuming cifraclub also has a similar function
+    // result = await cifraclub.scrapeLyricsFromUrl(url);
+    console.log('⚠️  CifraClub direct URL scraping not yet implemented.');
+    return null;
   }
 
   if (result) {
@@ -604,7 +604,7 @@ export async function fetchLyricsByUrl(
         source: source,
         fetchedAt: new Date().toISOString(),
         // Enhanced metadata for search
-        searchTerms: [artist, title].filter(Boolean).join(' ').toLowerCase(),
+        searchTerms: [result.artist, result.title].filter(Boolean).join(' ').toLowerCase(),
         genre: result.metadata?.genre || 'Gospel', // Default for Brazilian music sites
         language: result.metadata?.language || 'pt-BR',
         // Additional metadata that could be useful

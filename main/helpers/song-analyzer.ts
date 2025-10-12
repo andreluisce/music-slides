@@ -189,10 +189,19 @@ export async function updateSongAnalysis(
   };
 
   try {
+    // Read the existing song file
+    const existingSongData = await fse.readJson(cachePath);
+
+    // Update the ai_analysis field with the new analysis
+    const updatedSongData = {
+      ...existingSongData,
+      ai_analysis: finalAnalysis,
+    };
+
     // Save to local cache
-    await fse.writeJson(cachePath, finalAnalysis);
+    await fse.writeJson(cachePath, updatedSongData);
     console.log('✅ Updated analysis in local cache:', cachePath);
-    
+
     // Update Supabase
     const supabaseSong = await getSongFromSupabase(artist, title);
     if (supabaseSong) {

@@ -91,6 +91,7 @@ function SearchForm({ isSearching, setFoundRemoteSongs, setIsSearching }) {
   };
 
   const selectSong = async (result) => {
+    console.log({ result })
     setFetchingLyrics(true);
     setShowResults(false);
     setCurrentStep(0); // Start at step 0: "Acessando página"
@@ -102,7 +103,7 @@ function SearchForm({ isSearching, setFoundRemoteSongs, setIsSearching }) {
       setTimeout(() => setCurrentStep(1), 2000);  // After 2s, show "Extraindo letra"
 
       const fullResult = await api?.fetchLyricsByUrl(result.url, result.source);
-
+      console.log({ fullResult })
       if (fullResult) {
         setCurrentStep(2); // Complete
         const songEntry = {
@@ -199,20 +200,18 @@ function SearchForm({ isSearching, setFoundRemoteSongs, setIsSearching }) {
                     transition={{ duration: 0.3 }}
                     className='relative flex flex-col items-center'>
                     <div
-                      className={`flex h-8 w-8 items-center justify-center rounded-full border-2 transition-all ${
-                        index < currentStep
-                          ? `${step.borderClass} ${step.bgClass}`
-                          : index === currentStep
+                      className={`flex h-8 w-8 items-center justify-center rounded-full border-2 transition-all ${index < currentStep
+                        ? `${step.borderClass} ${step.bgClass}`
+                        : index === currentStep
                           ? `${step.borderClass} ${step.activeBgClass} shadow-lg ${step.shadowClass}`
                           : 'border-white/10 bg-white/5'
-                      }`}>
+                        }`}>
                       {index < currentStep ? (
                         <CheckCircle2 className={`h-4 w-4 ${step.iconClass}`} strokeWidth={2.5} />
                       ) : (
                         <div
-                          className={`h-2 w-2 rounded-full ${
-                            index === currentStep ? step.dotClass : 'bg-white/20'
-                          }`}
+                          className={`h-2 w-2 rounded-full ${index === currentStep ? step.dotClass : 'bg-white/20'
+                            }`}
                         />
                       )}
                     </div>
@@ -383,7 +382,7 @@ function SongListTable({ filteredLocalSongs, foundRemoteSongs, supabaseSongs, is
           <div className='grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-3'>
             {allSongs.map((song, index) => (
               <motion.div
-                key={song.url || song.filePath}
+                key={song.supabaseId || song.url || song.filePath}
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.3, delay: index * 0.05 }}
@@ -530,19 +529,7 @@ function Home() {
           </motion.div>
         )}
 
-        {/* Actions */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.2 }}
-          className='mb-3 flex gap-2'>
-          <Button
-            onClick={getAllLocalSongs}
-            size='sm'
-            className='bg-gradient-to-r from-purple-600 to-pink-600 text-xs hover:from-purple-700 hover:to-pink-700'>
-            Atualizar Músicas Locais
-          </Button>
-        </motion.div>
+
 
         {/* Songs List */}
         <SongListTable {...{ filteredLocalSongs, foundRemoteSongs, supabaseSongs, isSearching }} />

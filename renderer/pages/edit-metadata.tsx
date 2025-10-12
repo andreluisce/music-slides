@@ -420,8 +420,13 @@ function EditMetadata() {
       const artistStr = Array.isArray(artist) ? artist[0] : artist;
       const titleStr = Array.isArray(title) ? title[0] : title;
       const analysis = await api.getAdvancedSongAnalysis(artistStr!, titleStr!);
-      setSongAnalysis(analysis);
-      setError(null);
+      if (analysis && analysis.success === false) {
+        setError(analysis.error || 'Erro ao carregar análise da música');
+        setSongAnalysis(null); // Ensure songAnalysis is null on error
+      } else {
+        setSongAnalysis(analysis);
+        setError(null);
+      }
     } catch (err) {
       console.error('Error loading song analysis:', err);
       setError('Erro ao carregar análise da música');
@@ -628,7 +633,7 @@ function EditMetadata() {
             </div>
 
             <div className="space-y-4">
-              {songAnalysis.slides.map((slide, index) => (
+              {songAnalysis.slides && songAnalysis.slides.map((slide, index) => (
                 <SlideEditor
                   key={slide.id}
                   slide={slide}

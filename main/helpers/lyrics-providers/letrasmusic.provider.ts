@@ -36,9 +36,11 @@ export async function searchByTitleAndArtist({
     const searchUrl = `${BASE_URL}/?q=${encodeURIComponent(query)}`;
 
     console.log('🎵 Letras.mus.br searching:', query);
+    console.log('Search URL:', searchUrl);
 
     // Navigate to search page
     const navigated = await navigateWithRetry(page, searchUrl);
+    console.log('Navigation to search page successful:', navigated);
     if (!navigated) {
       console.log('❌ Failed to navigate to Letras.mus.br search');
       return null;
@@ -68,48 +70,81 @@ export async function searchByTitleAndArtist({
       console.log('❌ No search results found on Letras.mus.br');
       return null;
     }
+    console.log('Search results found. Attempting to extract first result link.');
 
     // Get the first result link - prioritize Google Custom Search results
-    let firstResultLink =
-      (await safeAttribute(page, 'a.gs-title', 'href')) ||
-      (await safeAttribute(page, '.cnt-list-songs a', 'href')) ||
-      (await safeAttribute(page, '.songList-table a', 'href')) ||
-      (await safeAttribute(page, 'a[href*="/' + artist.toLowerCase().replace(/\s+/g, '-') + '/"]', 'href'));
+    // Get all potential result links and filter for specific song pages
+    const allResultLinks = await page.$$eval(
+      '.gs-title, .cnt-list-songs a, .songList-table a',
+      (links, artistSlug) => {
+        const songLinks = [];
+        const artistPagePattern = new RegExp(`letras\\.mus\\.br/${artistSlug}/?$`);
+        const songPagePattern = new RegExp(`letras\\.mus\\.br/${artistSlug}/[^/]+/?$`);
+
+        for (const link of links) {
+          const href = link.getAttribute('href');
+          if (href && songPagePattern.test(href) && !artistPagePattern.test(href)) {
+            songLinks.push(href);
+          }
+        }
+        return songLinks;
+      },
+      artist.toLowerCase().replace(/\s+/g, '-')
+    );
+
+    let firstResultLink = allResultLinks[0];
 
     if (!firstResultLink) {
-      console.log('❌ Could not find first result link');
+      console.log('❌ Could not find a specific song result link');
       return null;
     }
 
-    const songUrl = firstResultLink.startsWith('http')
-      ? firstResultLink
-      : `${BASE_URL}${firstResultLink}`;
+    // Now, scrape the lyrics from the found song URL
+    console.log('🔗 Found song URL, now scraping lyrics directly:', firstResultLink);
+    return await scrapeLyricsFromUrl(firstResultLink);
 
-    console.log('🔗 Opening song page:', songUrl);
+  } catch (error) {
+    console.error('❌ Letras.mus.br scraping error:', error.message);
+    return null;
+  } finally {
+    await page.close();
+  }
+}
 
-    // Navigate to song page
-    const songPageLoaded = await navigateWithRetry(page, songUrl);
+/**
+ * Scrape lyrics, title, and artist directly from a given Letras.mus.br song URL
+ */
+export async function scrapeLyricsFromUrl(url: string): Promise<LyricResult | null> {
+  console.log('   🚀 Starting scrapeLyricsFromUrl for:', url);
+  const page = await createPage();
+
+  try {
+    console.log('   🌐 Navigating directly to song page:', url);
+
+    const songPageLoaded = await navigateWithRetry(page, url);
     if (!songPageLoaded) {
-      console.log('❌ Failed to load song page');
+      console.log('   ❌ Failed to load song page from direct URL');
       return null;
     }
 
-    console.log('✅ Song page loaded successfully');
+    console.log('   ✅ Song page loaded successfully from direct URL');
 
-    // Handle consent modal on song page too (quick check)
+    // Handle consent modal on song page (quick check)
+    console.log('   👀 Checking for consent modal...');
     await Promise.race([
       handleConsentModal(page),
       new Promise(resolve => setTimeout(resolve, 1000)) // Don't wait more than 1s for modals
     ]);
+    console.log('   ✅ Consent modal check complete.');
 
     // Extract lyrics using the native "Copy" feature - SUPER FAST!
-    console.log('📝 Extracting lyrics using native copy button (instant)...');
+    console.log('   📝 Attempting to extract lyrics using native copy button...');
 
     let rawLyrics = null;
 
     try {
       // Need to trigger the selection menu first by selecting some text
-      console.log('🖱️  Triggering selection menu...');
+      console.log('   🖱️  Triggering selection menu...');
 
       // Find the lyrics container and select some text to trigger the menu
       await page.evaluate(() => {
@@ -136,7 +171,7 @@ export async function searchByTitleAndArtist({
       const isVisible = await copyAllButton.isVisible().catch(() => false);
 
       if (isVisible) {
-        console.log('✅ Found copy button, clicking it...');
+        console.log('   ✅ Found copy button, clicking it...');
         await copyAllButton.click();
 
         // Wait a moment for clipboard to be populated
@@ -152,47 +187,52 @@ export async function searchByTitleAndArtist({
         });
 
         if (rawLyrics && rawLyrics.length > 10) {
-          console.log('✅ Lyrics copied from clipboard successfully!');
+          console.log('   ✅ Lyrics copied from clipboard successfully! Length:', rawLyrics.length);
+        } else {
+          console.log('   ❌ Lyrics not copied or too short from clipboard.');
         }
       } else {
-        console.log('⚠️  Copy button not visible, trying fallback');
+        console.log('   ⚠️  Copy button not visible, trying fallback');
       }
     } catch (error) {
-      console.log('⚠️  Copy button method failed:', error.message);
+      console.log('   ⚠️  Copy button method failed:', error.message);
     }
 
     // Fallback: Extract from DOM if copy button didn't work
     if (!rawLyrics || rawLyrics.length < 10) {
-      console.log('📝 Using fallback DOM extraction...');
-      const lyricsSelectors = ['.lyric-original', '.cnt-letra', '[class*="lyric"]', '.letra-cnt'];
+      console.log('   📝 Using fallback DOM extraction...');
+      const lyricsSelectors = ['.lyric-original', '.cnt-letra', '.lyric-content'];
 
       for (const selector of lyricsSelectors) {
         const text = await safeInnerText(page, selector);
         if (text && text.length > 10) {
           rawLyrics = text;
-          console.log(`✅ Found lyrics using selector: ${selector}`);
+          console.log(`   ✅ Found lyrics using selector: ${selector}`);
           break;
         }
       }
+      if (!rawLyrics || rawLyrics.length < 10) {
+        console.log('   ❌ Fallback DOM extraction failed to find sufficient lyrics.');
+      }
     }
 
-    console.log(`📝 Raw lyrics length: ${rawLyrics?.length || 0}`);
+    console.log(`   📝 Raw lyrics length: ${rawLyrics?.length || 0}`);
     if (rawLyrics) {
-      console.log(`📝 Lyrics preview: ${rawLyrics.substring(0, 100)}...`);
+      console.log(`   📝 Lyrics preview: ${rawLyrics.substring(0, Math.min(rawLyrics.length, 200))}...`);
     }
 
     if (!rawLyrics || rawLyrics.length < 10) {
-      console.log('❌ Lyrics text is too short or empty');
+      console.log('   ❌ Lyrics text is too short or empty');
       return null;
     }
 
     // Extract title and artist in parallel (fast!)
-    console.log('🔍 Extracting title and artist...');
+    console.log('   🔍 Extracting title and artist...');
 
     const [pageTitle, pageArtist] = await Promise.all([
       // Title selectors
       (async () => {
-        const titleSelectors = ['h1.head-title', 'h1', '.head-title'];
+        const titleSelectors = ['h1.lyric-title', 'h1.song-title', 'h1', '.head-title'];
         for (const sel of titleSelectors) {
           const text = await safeInnerText(page, sel);
           if (text) return text;
@@ -201,7 +241,7 @@ export async function searchByTitleAndArtist({
       })(),
       // Artist selectors
       (async () => {
-        const artistSelectors = ['h2.head-info-artist a', '.head-info-artist a', '.head-info-artist', 'h2 a', '.head-info a'];
+        const artistSelectors = ['h2.lyric-artist a', 'h2.song-artist a', '.head-info-artist a', '.head-info-artist', 'h2 a', '.head-info a'];
         for (const sel of artistSelectors) {
           const text = await safeInnerText(page, sel);
           if (text) return text;
@@ -210,13 +250,13 @@ export async function searchByTitleAndArtist({
       })()
     ]);
 
-    console.log(`📝 Page title: "${pageTitle}"`);
-    console.log(`🎤 Page artist: "${pageArtist}"`);
+    console.log(`   📝 Page title: "${pageTitle}"`);
+    console.log(`   🎤 Page artist: "${pageArtist}"`);
 
     // Try to extract artist from URL if page selectors failed
-    let extractedArtist = pageArtist || artist;
-    if (!extractedArtist && songUrl) {
-      const urlMatch = songUrl.match(/letras\.mus\.br\/([^\/]+)\//);
+    let extractedArtist = pageArtist || ''; // No artist from search query here
+    if (!extractedArtist && url) {
+      const urlMatch = url.match(/letras\.mus\.br\/([^\/]+)\//);
       if (urlMatch) {
         extractedArtist = urlMatch[1].replace(/-/g, ' ');
         console.log('   📌 Extracted artist from URL:', extractedArtist);
@@ -225,22 +265,23 @@ export async function searchByTitleAndArtist({
 
     const cleanedLyrics = cleanLyricsText(rawLyrics);
 
-    console.log('✅ Letras.mus.br found lyrics successfully!');
-    console.log(`   📝 Final title: "${pageTitle || title}"`);
-    console.log(`   🎤 Final artist: "${extractedArtist}"`);
+    console.log('   ✅ Letras.mus.br found lyrics successfully!');
+    console.log(`   📝 Final title: "${pageTitle || 'Unknown Title'}"`);
+    console.log(`   🎤 Final artist: "${extractedArtist || 'Unknown Artist'}"`);
     console.log(`   📝 Cleaned lyrics length: ${cleanedLyrics.length}`);
 
     return {
-      title: pageTitle || title,
-      artist: extractedArtist,
+      title: pageTitle || 'Unknown Title',
+      artist: extractedArtist || 'Unknown Artist',
       lyrics: cleanedLyrics,
       source: 'letrasmusic',
     };
   } catch (error) {
-    console.error('❌ Letras.mus.br scraping error:', error.message);
+    console.error('   ❌ Letras.mus.br direct scraping error:', error.message);
     return null;
   } finally {
     await page.close();
+    console.log('   🛑 Finished scrapeLyricsFromUrl.');
   }
 }
 
