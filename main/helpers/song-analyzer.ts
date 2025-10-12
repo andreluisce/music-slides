@@ -67,11 +67,37 @@ export async function getAnalyzedSlides(
       return lyrics.split('\n')
         .filter(line => line.trim())
         .map((line, index) => ({
+          id: `fallback-slide-${index}-${Date.now()}`,
           text: line.trim(),
           section: 'Verse',
           emotion: 'neutral',
+          intensity: 5,
+          timing: {
+            startTime: index * 5,
+            endTime: (index + 1) * 5,
+            bpm: 120,
+            emphasis: 'middle'
+          },
+          visual: {
+            backgroundColor: ['#1a365d', '#2d3748'],
+            textColor: '#ffffff',
+            fontSize: 'large',
+            fontWeight: 'normal',
+            textAlign: 'center',
+            animation: {
+              type: 'fade',
+              direction: 'in',
+              duration: 1.5,
+              delay: 0
+            },
+            backgroundMedia: {
+              type: 'gradient',
+              opacity: 0.8
+            }
+          },
           layoutSuggestion: 'default',
-          duration: 5
+          duration: 5,
+          isEditable: true,
         }));
     }
   }
