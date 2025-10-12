@@ -1,17 +1,20 @@
 import React, { useEffect, useState } from 'react';
 import Head from 'next/head';
 import { motion } from 'framer-motion';
-import { Plus, Palette, Edit, Trash2, Star } from 'lucide-react';
+import { Plus, Palette, Edit, Trash2, Star, Sparkles } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { getAllThemes, deleteTheme, updateTheme } from '../lib/supabase-service';
 import type { Theme } from '../lib/supabase';
 import ThemeModal from '../components/ThemeModal';
+
+const api = typeof window !== 'undefined' ? window.api : undefined;
 
 export default function Themes() {
   const [themes, setThemes] = useState<Theme[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTheme, setEditingTheme] = useState<Theme | null>(null);
+  const [isGeneratingTheme, setIsGeneratingTheme] = useState(false);
 
   useEffect(() => {
     loadThemes();
@@ -50,6 +53,21 @@ export default function Themes() {
     setIsModalOpen(true);
   };
 
+  const handleAISuggestion = async () => {
+    setIsGeneratingTheme(true);
+    try {
+      const suggestedTheme = await api?.suggestTheme();
+      if (suggestedTheme) {
+        setEditingTheme(suggestedTheme);
+        setIsModalOpen(true);
+      }
+    } catch (error) {
+      console.error('Error generating AI theme suggestion:', error);
+    } finally {
+      setIsGeneratingTheme(false);
+    }
+  };
+
   const handleModalClose = () => {
     setIsModalOpen(false);
     setEditingTheme(null);
@@ -81,20 +99,29 @@ export default function Themes() {
         <title>Temas - Lyrics Slideshow</title>
       </Head>
 
-      <div className='p-8'>
+      <div className='p-4'>
         {/* Header */}
-        <div className='mb-8'>
-          <h1 className='text-3xl font-bold text-white'>Temas e Estilos</h1>
-          <p className='mt-2 text-slate-400'>Personalize a aparência das suas apresentações</p>
+        <div className='mb-4'>
+          <h1 className='text-xl font-bold text-white'>Temas e Estilos</h1>
+          <p className='mt-1 text-xs text-slate-400'>Personalize a aparência das suas apresentações</p>
         </div>
 
         {/* Actions Bar */}
-        <div className='mb-6'>
+        <div className='mb-3 flex gap-2'>
           <Button
             onClick={handleNewTheme}
+            size='sm'
             className='bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700'>
-            <Plus className='mr-2 h-4 w-4' />
+            <Plus className='mr-1.5 h-3.5 w-3.5' />
             Novo Tema
+          </Button>
+          <Button
+            onClick={handleAISuggestion}
+            size='sm'
+            disabled={isGeneratingTheme}
+            className='bg-gradient-to-r from-blue-600 to-teal-600 hover:from-blue-700 hover:to-teal-700'>
+            <Sparkles className='mr-1.5 h-3.5 w-3.5' />
+            {isGeneratingTheme ? 'Gerando...' : 'Sugestão de Tema AI'}
           </Button>
         </div>
 
@@ -104,35 +131,36 @@ export default function Themes() {
             <div className='text-slate-400'>Carregando...</div>
           </div>
         ) : themes.length === 0 ? (
-          <div className='flex h-96 flex-col items-center justify-center rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm'>
-            <Palette className='h-16 w-16 text-slate-600' />
-            <h3 className='mt-4 text-lg font-semibold text-white'>Nenhum tema personalizado</h3>
-            <p className='mt-2 text-center text-sm text-slate-400'>
+          <div className='flex h-64 flex-col items-center justify-center rounded-lg border border-white/10 bg-white/5 backdrop-blur-sm'>
+            <Palette className='h-12 w-12 text-slate-600' />
+            <h3 className='mt-3 text-sm font-semibold text-white'>Nenhum tema personalizado</h3>
+            <p className='mt-1.5 text-center text-xs text-slate-400'>
               Crie temas personalizados para dar sua identidade
               <br />
               visual às apresentações
             </p>
             <Button
               onClick={handleNewTheme}
-              className='mt-6 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700'>
-              <Plus className='mr-2 h-4 w-4' />
+              size='sm'
+              className='mt-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700'>
+              <Plus className='mr-1.5 h-3.5 w-3.5' />
               Criar Tema
             </Button>
           </div>
         ) : (
-          <div className='grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3'>
+          <div className='grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3'>
             {themes.map((theme, index) => (
               <motion.div
                 key={theme.id}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3, delay: index * 0.05 }}
-                className='rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-white/10 p-6 transition-all hover:border-purple-500/50 hover:from-purple-500/10 hover:to-pink-500/10 hover:shadow-lg hover:shadow-purple-500/20'>
-                <div className='mb-4 flex items-start justify-between'>
+                className='rounded-lg border border-white/10 bg-gradient-to-br from-white/5 to-white/10 p-3 transition-all hover:border-purple-500/50 hover:from-purple-500/10 hover:to-pink-500/10 hover:shadow-lg hover:shadow-purple-500/20'>
+                <div className='mb-3 flex items-start justify-between'>
                   <div>
-                    <h3 className='text-lg font-semibold text-white'>{theme.name}</h3>
+                    <h3 className='text-sm font-semibold text-white'>{theme.name}</h3>
                     {theme.is_default && (
-                      <span className='mt-1 inline-flex items-center gap-1 text-xs text-yellow-400'>
+                      <span className='mt-0.5 inline-flex items-center gap-1 text-xs text-yellow-400'>
                         <Star className='h-3 w-3 fill-current' />
                         Padrão
                       </span>
@@ -141,11 +169,11 @@ export default function Themes() {
                 </div>
 
                 {/* Preview */}
-                <div className='mb-4 flex h-32 items-center justify-center rounded-lg border border-white/10 bg-black p-4'>
+                <div className='mb-3 flex h-24 items-center justify-center rounded-md border border-white/10 bg-black p-3'>
                   <p
                     style={{
                       fontFamily: theme.font_family,
-                      fontSize: `${theme.font_size * 0.4}px`,
+                      fontSize: `${theme.font_size * 0.3}px`,
                       fontWeight: theme.font_weight,
                       color: theme.text_color,
                       textShadow: theme.text_shadow,
@@ -155,21 +183,21 @@ export default function Themes() {
                 </div>
 
                 {/* Info */}
-                <div className='mb-4 space-y-1 text-xs text-slate-400'>
+                <div className='mb-3 space-y-0.5 text-xs text-slate-400'>
                   <p>Fonte: {theme.font_family}</p>
                   <p>Tamanho: {theme.font_size}px</p>
                   <p>Animação: {theme.animation_type}</p>
                 </div>
 
                 {/* Actions */}
-                <div className='flex gap-2'>
+                <div className='flex gap-1.5'>
                   {!theme.is_default && (
                     <Button
                       onClick={() => handleToggleDefault(theme)}
                       size='sm'
                       variant='outline'
                       className='flex-1 border-yellow-500/20 bg-yellow-500/5 text-yellow-400 hover:bg-yellow-500/10'>
-                      <Star className='h-4 w-4' />
+                      <Star className='h-3.5 w-3.5' />
                     </Button>
                   )}
                   <Button
@@ -177,7 +205,7 @@ export default function Themes() {
                     size='sm'
                     variant='outline'
                     className='flex-1 border-white/20 bg-white/5 text-white hover:bg-white/10'>
-                    <Edit className='h-4 w-4' />
+                    <Edit className='h-3.5 w-3.5' />
                   </Button>
                   {!theme.is_default && (
                     <Button
@@ -185,7 +213,7 @@ export default function Themes() {
                       size='sm'
                       variant='outline'
                       className='border-red-500/20 bg-red-500/5 text-red-400 hover:bg-red-500/10'>
-                      <Trash2 className='h-4 w-4' />
+                      <Trash2 className='h-3.5 w-3.5' />
                     </Button>
                   )}
                 </div>

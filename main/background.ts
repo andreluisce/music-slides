@@ -1,3 +1,20 @@
+// IMPORTANT: Load environment variables FIRST, before any other imports
+import dotenv from 'dotenv';
+import path from 'path';
+
+const envPath = path.join(__dirname, '../.env');
+console.log('📦 Loading .env from:', envPath);
+dotenv.config({ path: envPath });
+
+const envLocalPath = path.join(__dirname, '../.env.local');
+dotenv.config({ path: envLocalPath });
+
+console.log('✅ Environment variables loaded');
+console.log('   SUPABASE_URL:', process.env.SUPABASE_URL ? '✓' : '✗');
+console.log('   SUPABASE_ANON_KEY:', process.env.SUPABASE_ANON_KEY ? '✓' : '✗');
+console.log('   GOOGLE_GEMINI_API_KEY:', process.env.GOOGLE_GEMINI_API_KEY ? '✓' : '✗');
+
+// Now import everything else
 import { app, BrowserWindow, ipcMain, screen, globalShortcut } from 'electron';
 import serve from 'electron-serve';
 import settings from 'electron-settings';
@@ -9,6 +26,7 @@ import sanitize from 'sanitize-filename';
 import fse from 'fs-extra';
 import createTouchBarLyrics from './helpers/create-touchbar-items';
 import { SearchType } from '../renderer/shared/types';
+import { logError } from './helpers/file-system';
 
 let lyricsWindow: BrowserWindow;
 let lyricsSettingsWindow: BrowserWindow;
@@ -139,19 +157,8 @@ ipcMain.handle('get-path', (event, { name }) => {
 });
 
 ipcMain.handle('get-all-local-songs', async () => {
-  const documentsPath = app.getPath('documents');
-  const baseDir = `${documentsPath}/lyrics-slide-show`;
-  const songsDir = `${baseDir}/songs`;
-  const videosDir = `${baseDir}/videos`;
-
-  await fse.ensureDir(songsDir);
-  await fse.ensureDir(videosDir);
-
-  const files = await fse.readdir(songsDir);
-  return files
-    .map(item => (item.includes('.txt') ? item : undefined))
-    .filter(Boolean)
-    .sort();
+  const { getAllSongsGroupedByArtist } = await import('./helpers/file-system');
+  return getAllSongsGroupedByArtist();
 });
 
 ipcMain.handle('get-default-slides', async () => {
@@ -225,14 +232,19 @@ ipcMain.handle('get-lyric-by-url-handle', async (event, { url }) => {
 ipcMain.handle('get-lyric-by-file-path', async (event, { filePath, isDefault = false }) => {
   const documentsPath = app.getPath('documents');
 
-  const lyric = await fse.readFile(
+  const fileContent = await fse.readFile(
     `${documentsPath}/lyrics-slide-show/${isDefault ? 'default-slides' : 'songs'}/${filePath}`,
     {
       encoding: 'utf8',
     }
   );
 
-  const lyricArray = lyric.split('\n');
+  // Parse the file content to separate frontmatter from lyrics
+  const { parseSongFileContent } = await import('./helpers/file-system');
+  const { lyrics } = parseSongFileContent(fileContent);
+
+  // Split lyrics into lines and filter empty ones
+  const lyricArray = lyrics.split('\n').filter(line => line.trim() !== '');
 
   if (lyricsWindow && !lyricsWindow.isDestroyed()) {
     lyricsWindow.setTouchBar(createTouchBarLyrics(lyricsWindow, lyricArray));
@@ -288,16 +300,36 @@ ipcMain.handle('get-video-base64', async (_event, { videoPath }) => {
   }
 });
 
-ipcMain.handle('smart-lyrics-search', async (_event, { userQuery }) => {
-  return lyrics.smartLyricsSearch(userQuery);
+ipcMain.handle('advanced-lyrics-search', async (_event, { userQuery }) => {
+  console.log('🔍 Advanced lyrics search request:', userQuery);
+  return lyrics.advancedLyricsSearch(userQuery);
 });
 
-ipcMain.handle('suggest-theme-colors', async (_event, { lyrics }) => {
-  return lyrics.suggestThemeColors(lyrics);
+// Fast search - returns list of results without fetching full lyrics
+ipcMain.handle('fast-lyrics-search', async (_event, { userQuery }) => {
+  console.log('⚡ Fast lyrics search request:', userQuery);
+  const { fastLyricsSearch } = await import('./helpers/lyrics-agent');
+  return fastLyricsSearch(userQuery);
 });
 
-ipcMain.handle('suggest-bible-verses', async (_event, { lyrics }) => {
-  return lyrics.suggestBibleVerses(lyrics);
+// Fetch lyrics by URL after user selects from results
+ipcMain.handle('fetch-lyrics-by-url', async (_event, { url, source }) => {
+  console.log('📥 Fetch lyrics by URL:', url);
+  const { fetchLyricsByUrl } = await import('./helpers/lyrics-agent');
+  return fetchLyricsByUrl(url, source);
+});
+
+ipcMain.handle('suggest-theme-colors', async (_event, { lyrics: lyricsText }) => {
+  return lyrics.suggestThemeColors(lyricsText);
+});
+
+ipcMain.handle('suggest-bible-verses', async (_event, { lyrics: lyricsText }) => {
+  return lyrics.suggestBibleVerses(lyricsText);
+});
+
+ipcMain.handle('suggest-theme', async () => {
+  const { suggestTheme } = await import('./helpers/ai-service');
+  return suggestTheme();
 });
 
 ipcMain.handle('get-setting', async (_event, key) => {
@@ -336,20 +368,121 @@ ipcMain.on('update-lyrics-theme', (event, { windowId, themeData }) => {
   }
 });
 
+ipcMain.on('renderer-error', async (event, errorDetails) => {
+  console.error('Unhandled Error in Renderer Process (via IPC):', errorDetails);
+  await logError(`Unhandled Error in Renderer Process (${errorDetails.type})`, {
+    name: 'RendererError',
+    message: errorDetails.message,
+    stack: errorDetails.stack,
+  });
+});
+
+// CRUD de músicas
+ipcMain.handle('save-song', async (_event, { artist, title, lyrics, metadata }) => {
+  const { saveSong } = await import('./helpers/file-system');
+  try {
+    const filePath = await saveSong(artist, title, lyrics, metadata);
+    console.log(`✅ Song saved: ${artist} - ${title}`);
+    return { success: true, filePath };
+  } catch (error) {
+    console.error('❌ Error saving song:', error);
+    await logError('Error saving song', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('update-song', async (_event, { artist, title, lyrics, metadata }) => {
+  const { getSongFilePath, createSongFileContent, getArtistFolderPath } = await import('./helpers/file-system');
+  try {
+    // Check if artist or title changed (metadata contains new values if they changed)
+    const newArtist = metadata?.artist || artist;
+    const newTitle = metadata?.title || title;
+    const hasLocationChanged = newArtist !== artist || newTitle !== title;
+
+    if (hasLocationChanged) {
+      // Delete old file
+      const oldFilePath = getSongFilePath(artist, title);
+      const oldExists = await fse.pathExists(oldFilePath);
+      if (oldExists) {
+        await fse.remove(oldFilePath);
+        console.log(`🗑️ Deleted old file: ${oldFilePath}`);
+      }
+
+      // Create new file at new location
+      const { artist: _a, title: _t, ...cleanMetadata } = metadata || {};
+      const newFilePath = getSongFilePath(newArtist, newTitle);
+
+      // Ensure artist folder exists
+      const artistFolder = getArtistFolderPath(newArtist);
+      await fse.ensureDir(artistFolder);
+
+      const fileContent = createSongFileContent(newArtist, newTitle, lyrics, {
+        ...cleanMetadata,
+        updatedAt: new Date().toISOString().split('T')[0],
+      });
+
+      await fse.writeFile(newFilePath, fileContent, 'utf8');
+      console.log(`✅ Song moved and updated: ${artist} - ${title} → ${newArtist} - ${newTitle}`);
+      return { success: true, filePath: newFilePath };
+    } else {
+      // Just update the existing file
+      const filePath = getSongFilePath(artist, title);
+      const fileContent = createSongFileContent(artist, title, lyrics, {
+        ...metadata,
+        updatedAt: new Date().toISOString().split('T')[0],
+      });
+
+      await fse.writeFile(filePath, fileContent, 'utf8');
+      console.log(`✅ Song updated: ${artist} - ${title}`);
+      return { success: true, filePath };
+    }
+  } catch (error) {
+    console.error('❌ Error updating song:', error);
+    await logError('Error updating song', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('delete-song', async (_event, { artist, title }) => {
+  const { getSongFilePath } = await import('./helpers/file-system');
+  try {
+    const filePath = getSongFilePath(artist, title);
+    await fse.remove(filePath);
+    console.log(`✅ Song deleted: ${artist} - ${title}`);
+    return { success: true };
+  } catch (error) {
+    console.error('❌ Error deleting song:', error);
+    await logError('Error deleting song', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('read-song', async (_event, { artist, title }) => {
+  const { readSong } = await import('./helpers/file-system');
+  try {
+    const songData = await readSong(artist, title);
+    return { success: true, ...songData };
+  } catch (error) {
+    console.error('❌ Error reading song:', error);
+    await logError('Error reading song', error);
+    return { success: false, error: error.message };
+  }
+});
+
 app.on('window-all-closed', () => {
   app.quit();
 });
 
-process.on('uncaughtException', error => {
+process.on('uncaughtException', async error => {
   console.error('Unhandled Exception in Main Process:', error);
-  // Optionally, display an error dialog to the user
-  // dialog.showErrorBox('Error', 'An unexpected error occurred. The application will now close.');
-  app.quit();
+  await logError('Unhandled Exception in Main Process', error);
+  app.relaunch();
+  app.exit(1);
 });
 
-process.on('unhandledRejection', (reason, promise) => {
+process.on('unhandledRejection', async (reason, promise) => {
   console.error('Unhandled Rejection in Main Process:', reason, promise);
-  // Optionally, display an error dialog to the user
-  // dialog.showErrorBox('Error', 'An unexpected error occurred. The application will now close.');
-  app.quit();
+  await logError(`Unhandled Rejection in Main Process: ${reason}`, new Error(reason as string));
+  app.relaunch();
+  app.exit(1);
 });
