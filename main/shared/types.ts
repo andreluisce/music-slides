@@ -3,3 +3,11 @@ export const SearchType = {
   ByTitleAndArtist: 'ByTitleAndArtist',
   ByTitleAndArtistExact: 'ByTitleAndArtistExact',
 };
+
+export interface Slide {
+  text: string;
+  section: string;
+  emotion: string;
+  layoutSuggestion: string;
+  duration: number;
+}

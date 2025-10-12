@@ -18,37 +18,56 @@ interface SongInfo {
 export const formatLyrics = async (lyrics: string) => {
   try {
     const formattedLyrics = await getGeminiResponse({
-      prompt: `Format and clean the following lyrics for a presentation slide show:
-      - Fix capitalization, punctuation, and common typos.
-      - Detect and clearly mark sections like [Verse 1], [Chorus], [Bridge], [Outro].
-      - Remove any duplicate lines or sections.
-      - Split the lyrics into optimal slide lengths, aiming for 2-4 meaningful lines per slide.
-      - Ensure each slide break is logical and doesn't cut a phrase mid-sentence.
-      - Return only the formatted lyrics, with each slide content separated by a unique delimiter like "---SLIDE_BREAK---".
+      prompt: `Format and clean the following lyrics for a presentation slide show. The lyrics are for a worship song, likely in Portuguese or English. Return a JSON array of objects, where each object represents a slide.
+
+      Each slide MUST have between 2 and 4 lines of text.
+      Each slide MUST have a maximum of 15 words.
+      If a slide contains multiple phrases, break the line between them to improve readability.
+
+      Each object must have the following properties:
+      - "text": The text content of the slide.
+      - "section": The lyrical section (e.g., "Verse 1", "Chorus", "Bridge", "Outro").
+      - "emotion": The emotional tone of the slide (e.g., "joyful", "reflective", "powerful").
+      - "layoutSuggestion": A suggestion for the layout (e.g., "centered-large-font", "bottom-aligned", "two-columns").
+      - "duration": The estimated duration of the slide in seconds (e.g., 5.5).
       
       Lyrics: """${lyrics}"""
       
       Example of desired output format:
-      [Verse 1]
-      Line 1
-      Line 2
-      ---SLIDE_BREAK---
-      Line 3
-      Line 4
-      ---SLIDE_BREAK---
-      [Chorus]
-      Chorus Line 1
-      Chorus Line 2
-      ---SLIDE_BREAK---
-      Chorus Line 3
-      Chorus Line 4
+      [
+        {
+          "text": "Line 1\nLine 2",
+          "section": "Verse 1",
+          "emotion": "reflective",
+          "layoutSuggestion": "bottom-aligned",
+          "duration": 7.2
+        },
+        {
+          "text": "Chorus Line 1\nChorus Line 2",
+          "section": "Chorus",
+          "emotion": "powerful",
+          "layoutSuggestion": "centered-large-font",
+          "duration": 10.0
+        }
+      ]
       
-      Return only the formatted lyrics, nothing else.`
+      Return a valid JSON array only.`
     });
-    return formattedLyrics.split('---SLIDE_BREAK---').map(s => s.trim()).filter(Boolean);
+
+    const jsonRegex = /```json\n([\s\S]*?)\n```/;
+    const match = formattedLyrics.match(jsonRegex);
+
+    let slides;
+    if (match && match[1]) {
+      slides = JSON.parse(match[1]);
+    } else {
+      slides = JSON.parse(formattedLyrics);
+    }
+    return slides;
   } catch (error) {
     console.error('Error formatting lyrics:', error);
-    return lyrics.split('\n').map(s => s.trim()).filter(Boolean);
+    // Fallback to simple splitting
+    return lyrics.split('\n').map(s => ({ text: s.trim(), section: 'Verse', emotion: 'neutral', layoutSuggestion: 'default', duration: 5 })).filter(s => s.text);
   }
 };
 
@@ -85,8 +104,8 @@ export const searchByTitleAndArtist = async ({ artist, title }: { artist: string
 
 export const suggestThemeColors = async (lyrics: string) => {
   try {
-    const colorPalette = await getGeminiResponse({
-      prompt: `Analyze the mood and emotion of the following song lyrics and suggest a matching color palette for a presentation background. Return a JSON array of 3-5 hex color codes, suitable for a gradient or theme.
+    const colorPaletteResponse = await getGeminiResponse({
+      prompt: `Analyze the mood and emotion of the following song lyrics, which are from a worship song (likely in Portuguese or English), and suggest a matching color palette for a presentation background. Return a JSON array of 3-5 hex color codes, suitable for a gradient or theme.
       
       Lyrics: """${lyrics}"""
       
@@ -95,17 +114,28 @@ export const suggestThemeColors = async (lyrics: string) => {
       
       Return JSON array only.`
     });
-    return JSON.parse(colorPalette);
+
+    const jsonRegex = /```json\n([\s\S]*?)\n```/;
+    const match = colorPaletteResponse.match(jsonRegex);
+
+    let colorPalette;
+    if (match && match[1]) {
+      colorPalette = JSON.parse(match[1]);
+    } else {
+      colorPalette = JSON.parse(colorPaletteResponse);
+    }
+
+    return colorPalette;
   } catch (error) {
     console.error('Error suggesting theme colors:', error);
     return ['#000000', '#FFFFFF']; // Default colors
   }
 };
 
-export const suggestBibleVerses = async (lyrics: string) => {
+export const suggestBibleVerses = async (lyrics: string, theme?: string) => {
   try {
-    const bibleVerses = await getGeminiResponse({
-      prompt: `Analyze the themes and messages in the following song lyrics and suggest 3-5 relevant Bible verses. For each verse, provide the book, chapter, and verse number. Return a JSON array of objects, where each object has 'book', 'chapter', and 'verse' properties.
+    const bibleVersesResponse = await getGeminiResponse({
+      prompt: `Analyze the themes and messages in the following song lyrics, which are from a worship song (likely in Portuguese or English), and suggest 3-5 relevant Bible verses. ${theme ? `Focus on the theme of \"${theme}\".` : ''} For each verse, provide the book, chapter, and verse number. Return a JSON array of objects, where each object has 'book', 'chapter', and 'verse' properties.
 
       Lyrics: """${lyrics}"""
 
@@ -117,7 +147,18 @@ export const suggestBibleVerses = async (lyrics: string) => {
 
       Return JSON array only.`
     });
-    return JSON.parse(bibleVerses);
+
+    const jsonRegex = /```json\n([\s\S]*?)\n```/;
+    const match = bibleVersesResponse.match(jsonRegex);
+
+    let bibleVerses;
+    if (match && match[1]) {
+      bibleVerses = JSON.parse(match[1]);
+    } else {
+      bibleVerses = JSON.parse(bibleVersesResponse);
+    }
+
+    return bibleVerses;
   } catch (error) {
     console.error('Error suggesting Bible verses:', error);
     return [];

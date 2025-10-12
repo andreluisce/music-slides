@@ -5,6 +5,8 @@ import { motion } from 'framer-motion';
 import { Database, Monitor, Keyboard, Info, Eye, EyeOff, Image as ImageIcon, Upload } from 'lucide-react';
 import { Label } from '../components/ui/label';
 import { Button } from '../components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import { Slider } from '../components/ui/slider';
 
 const api = typeof window !== 'undefined' ? window.api : undefined;
 
@@ -12,6 +14,8 @@ export default function Settings() {
   const [showPagination, setShowPagination] = useState(true);
   const [showLogo, setShowLogo] = useState(true);
   const [logoPath, setLogoPath] = useState('/images/logo.svg');
+  const [transitionType, setTransitionType] = useState('fade');
+  const [transitionSpeed, setTransitionSpeed] = useState(0.5);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -20,9 +24,14 @@ export default function Settings() {
       const paginationSetting = await api?.getSetting('showPagination');
       const showLogoSetting = await api?.getSetting('showLogo');
       const logoPathSetting = await api?.getSetting('logoPath');
+      const transitionTypeSetting = await api?.getSetting('transitionType');
+      const transitionSpeedSetting = await api?.getSetting('transitionSpeed');
 
       if (paginationSetting !== undefined) setShowPagination(paginationSetting);
       if (showLogoSetting !== undefined) setShowLogo(showLogoSetting);
+      if (transitionTypeSetting) setTransitionType(transitionTypeSetting);
+      if (transitionSpeedSetting) setTransitionSpeed(transitionSpeedSetting);
+
       // Only override default logoPath if a custom one is set
       if (logoPathSetting) {
         if (logoPathSetting === 'logo.svg') {
@@ -45,6 +54,16 @@ export default function Settings() {
     const newValue = !showLogo;
     setShowLogo(newValue);
     await api?.setSetting('showLogo', newValue);
+  };
+
+  const handleTransitionTypeChange = async (newValue: string) => {
+    setTransitionType(newValue);
+    await api?.setSetting('transitionType', newValue);
+  };
+
+  const handleTransitionSpeedChange = async (newValue: number) => {
+    setTransitionSpeed(newValue);
+    await api?.setSetting('transitionSpeed', newValue);
   };
 
   const handleSelectLogo = () => {
@@ -177,6 +196,46 @@ export default function Settings() {
                       {logoPath.split('/').pop() || logoPath}
                     </p>
                   )}
+                </div>
+              </div>
+
+              {/* Animation Settings */}
+              <div className='rounded-md border border-white/10 bg-white/5 p-2.5'>
+                <Label className='text-sm text-white'>Animações</Label>
+                <p className='mt-0.5 mb-2 text-xs text-slate-400'>
+                  Configure as animações de transição dos slides
+                </p>
+
+                <div className='space-y-4'>
+                  {/* Transition Type */}
+                  <div>
+                    <Label className='text-xs text-slate-300'>Tipo de Transição</Label>
+                    <Select value={transitionType} onValueChange={handleTransitionTypeChange}>
+                      <SelectTrigger className="w-full mt-1">
+                        <SelectValue placeholder="Selecione um tipo" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="fade">Fade</SelectItem>
+                        <SelectItem value="slide">Slide</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Transition Speed */}
+                  <div>
+                    <Label className='text-xs text-slate-300'>Velocidade da Transição</Label>
+                    <div className="flex items-center gap-4 mt-1">
+                      <Slider
+                        value={[transitionSpeed]}
+                        onValueChange={(value) => handleTransitionSpeedChange(value[0])}
+                        min={0.1}
+                        max={2}
+                        step={0.1}
+                        className="w-full"
+                      />
+                      <span className="text-xs text-slate-400">{transitionSpeed.toFixed(1)}s</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

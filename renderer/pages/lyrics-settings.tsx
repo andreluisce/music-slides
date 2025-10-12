@@ -9,6 +9,7 @@ import { Input } from '../components/ui/input';
 import { Button } from '../components/ui/button';
 import { getAllThemes } from '../lib/supabase-service';
 import type { Theme } from '../lib/supabase';
+import { Slide } from '../../../main/shared/types';
 
 const api = typeof window !== 'undefined' ? window.api : undefined;
 
@@ -26,7 +27,7 @@ const GRADIENT_PRESETS = [
 ];
 
 function LyricsDisplaySettingsPage() {
-  const [songLyric, setSongLyric] = useState([]);
+  const [songLyric, setSongLyric] = useState<Slide[]>([]);
   const [backgroundVideos, setBackgroundVideos] = useState([]);
   const [documentsPath, setDocumentsPath] = useState('');
   const [windowId, setWindowId] = useState<number | null>(null);
@@ -34,6 +35,12 @@ function LyricsDisplaySettingsPage() {
   const [themes, setThemes] = useState<Theme[]>([]);
   const [selectedThemeId, setSelectedThemeId] = useState<string>('');
   const [fontSize, setFontSize] = useState(72);
+  const [mediaQueries, setMediaQueries] = useState<string[]>([]);
+  const [pexelsResults, setPexelsResults] = useState<any[]>([]);
+  const [bibleVerseTheme, setBibleVerseTheme] = useState('');
+  const [lyricsWithChords, setLyricsWithChords] = useState<string[]>([]);
+  const [showChords, setShowChords] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
 
   // Background settings
   const [backgroundType, setBackgroundType] = useState<BackgroundType>('none');
@@ -133,7 +140,7 @@ function LyricsDisplaySettingsPage() {
     if (windowId) {
       console.log('📤 Control: Sending updateLyricsTheme to windowId:', windowId);
       api?.updateLyricsTheme?.(windowId, {
-        fontFamily: theme.font_family,
+        fontFamily: theme.body_font_family,
         fontSize: theme.font_size,
         fontWeight: theme.font_weight,
         textColor: theme.text_color,
@@ -163,7 +170,7 @@ function LyricsDisplaySettingsPage() {
     if (theme && windowId) {
       console.log('📤 Control: Sending font size update. Theme:', theme.name, 'Size:', value);
       api?.updateLyricsTheme?.(windowId, {
-        fontFamily: theme.font_family,
+        fontFamily: theme.body_font_family,
         fontSize: value,
         fontWeight: theme.font_weight,
         textColor: theme.text_color,
@@ -286,7 +293,7 @@ function LyricsDisplaySettingsPage() {
   useEffect(() => {
     console.log('🎵 Settings: Setting up onLoadedLyrics listener');
 
-    const handleLoadedLyrics = (loadedLyrics: string[]) => {
+    const handleLoadedLyrics = (loadedLyrics: Slide[]) => {
       console.log('📥 Settings: Received lyrics:', loadedLyrics?.length || 0, 'lines');
       setSongLyric(loadedLyrics);
     };
@@ -350,6 +357,19 @@ function LyricsDisplaySettingsPage() {
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [activeSlideIndex, songLyric.length, windowId]);
+
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (isPlaying && activeSlideIndex < songLyric.length - 1) {
+      const duration = songLyric[activeSlideIndex].duration * 1000; // convert to ms
+      timer = setTimeout(() => {
+        handleSlideClick(activeSlideIndex + 1);
+      }, duration);
+    } else if (isPlaying) {
+      setIsPlaying(false); // Stop at the end
+    }
+    return () => clearTimeout(timer);
+  }, [isPlaying, activeSlideIndex, songLyric]);
 
   return (
     <Fragment>
@@ -427,12 +447,75 @@ function LyricsDisplaySettingsPage() {
                 <h3 className='text-sm font-semibold'>Fundo</h3>
               </div>
 
+              {/* AI Background Suggestions */}
+              {songLyric.length > 0 && (
+                <div className='space-y-2'>
+                  <Button
+                    onClick={async () => {
+                      const queries = await api?.suggestBackgroundMedia(songLyric.map(s => s.text).join('\n'));
+                      if (queries && queries.length > 0) {
+                        setMediaQueries(queries);
+                      }
+                    }}
+                    className='w-full bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600'>
+                    <Sparkles className='mr-2 h-4 w-4' />
+                    Sugerir Fundos AI
+                  </Button>
+                  {mediaQueries.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {mediaQueries.map(query => (
+                        <Button
+                          key={query}
+                          variant="outline"
+                          size="sm"
+                          onClick={async () => {
+                            const images = await api?.searchPexelsImages(query);
+                            const videos = await api?.searchPexelsVideos(query);
+                            setPexelsResults([...images, ...videos]);
+                          }}>
+                          {query}
+                        </Button>
+                      ))}
+                    </div>
+                  )}
+                  {pexelsResults.length > 0 && (
+                    <div className="grid grid-cols-2 gap-2">
+                      {pexelsResults.map(result => (
+                        <div
+                          key={result.id}
+                          className="relative cursor-pointer"
+                          onClick={() => {
+                            if (result.video_files) {
+                              // It's a video
+                              const videoUrl = result.video_files.find(f => f.quality === 'hd')?.link || result.video_files[0].link;
+                              api?.selectVideoBackground(windowId, videoUrl);
+                              setBackgroundType('video');
+                            } else {
+                              // It's an image
+                              const imageUrl = result.src.large;
+                              const imageBg = `url(${imageUrl}) center/cover no-repeat`;
+                              api?.setCustomBackground(windowId, imageBg);
+                              setBackgroundType('image');
+                            }
+                          }}>
+                          {result.video_files ? (
+                            <video src={result.video_files.find(f => f.quality === 'sd')?.link || result.video_files[0].link} className="w-full h-24 object-cover rounded-lg" />
+                          ) : (
+                            <img src={result.src.medium} alt={result.alt} className="w-full h-24 object-cover rounded-lg" />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* AI Theme Suggestions */}
               {songLyric.length > 0 && (
                 <div className='space-y-2'>
                   <Button
                     onClick={async () => {
-                      const colors = await api?.suggestThemeColors(songLyric.join('\n'));
+                      const colors = await api?.suggestThemeColors(songLyric.map(s => s.text).join('\n'));
                       if (colors && colors.length > 0) {
                         setGradientStart(colors[0]);
                         setGradientEnd(colors[colors.length - 1]);
@@ -679,9 +762,14 @@ function LyricsDisplaySettingsPage() {
                   <BookOpen className='h-4 w-4' />
                   <h3 className='text-sm font-semibold'>Sugestões Bíblicas AI</h3>
                 </div>
+                <Input
+                  placeholder="Digite um tema (opcional)"
+                  className='border-white/20 bg-white/10 text-white placeholder:text-slate-400'
+                  onChange={(e) => setBibleVerseTheme(e.target.value)}
+                />
                 <Button
                   onClick={async () => {
-                    const verses = await api?.suggestBibleVerses(songLyric.join('\n'));
+                    const verses = await api?.suggestBibleVerses(songLyric.map(s => s.text).join('\n'), bibleVerseTheme);
                     if (verses && verses.length > 0) {
                       // Here you would typically add these verses to the presentation
                       console.log('Suggested Bible Verses:', verses);
@@ -694,6 +782,51 @@ function LyricsDisplaySettingsPage() {
                 </Button>
               </motion.div>
             )}
+
+            {/* Tools */}
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.6 }}
+              className='space-y-3'>
+              <div className='flex items-center gap-2 text-white'>
+                <Sparkles className='h-4 w-4' />
+                <h3 className='text-sm font-semibold'>Ferramentas</h3>
+              </div>
+              <Button
+                onClick={async () => {
+                  const withChords = await Promise.all(songLyric.map(s => api?.generateChords(s.text)));
+                  setLyricsWithChords(withChords);
+                }}
+                className='w-full bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600'>
+                Gerar Cifras
+              </Button>
+              {lyricsWithChords.length > 0 && (
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="show-chords" className="text-white">Mostrar Cifras</Label>
+                  <input
+                    type="checkbox"
+                    id="show-chords"
+                    checked={showChords}
+                    onChange={(e) => setShowChords(e.target.checked)}
+                  />
+                </div>
+              )}
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => setIsPlaying(true)}
+                  disabled={isPlaying}
+                  className='w-full bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600'>
+                  Play
+                </Button>
+                <Button
+                  onClick={() => setIsPlaying(false)}
+                  disabled={!isPlaying}
+                  className='w-full bg-gradient-to-r from-red-500 to-orange-500 hover:from-red-600 hover:to-orange-600'>
+                  Stop
+                </Button>
+              </div>
+            </motion.div>
           </div>
         </div>
 
@@ -741,7 +874,7 @@ function LyricsDisplaySettingsPage() {
                       <div className='flex min-h-[140px] flex-col justify-between'>
                         <div className='mb-3 flex-1'>
                           <p className='line-clamp-5 text-sm leading-relaxed text-slate-300'>
-                            {lyr}
+                            {showChords ? lyricsWithChords[index] : lyr.text}
                           </p>
                         </div>
                         <div className='flex items-center justify-between'>
@@ -751,6 +884,11 @@ function LyricsDisplaySettingsPage() {
                             }`}>
                             #{index + 1}
                           </span>
+                          <div className="text-xs text-slate-400">
+                            <p>Section: {lyr.section}</p>
+                            <p>Emotion: {lyr.emotion}</p>
+                            <p>Layout: {lyr.layoutSuggestion}</p>
+                          </div>
                           {activeSlideIndex === index && (
                             <ChevronRight className='h-4 w-4 text-purple-400' />
                           )}

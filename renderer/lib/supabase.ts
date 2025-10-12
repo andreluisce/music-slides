@@ -39,7 +39,8 @@ export interface VideoBackground {
 export interface Theme {
   id: string;
   name: string;
-  font_family: string;
+  title_font_family: string;
+  body_font_family: string;
   font_size: number;
   font_weight: number;
   text_color: string;

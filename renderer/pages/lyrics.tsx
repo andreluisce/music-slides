@@ -7,12 +7,13 @@ import { getAllThemes } from '../lib/supabase-service';
 import type { Theme } from '../lib/supabase';
 
 import { LogoSvg } from '../shared/Icons/Logo';
+import { Slide } from '../../../main/shared/types';
 
 const api = typeof window !== 'undefined' ? window.api : undefined;
 
 function LyricsDisplayPage() {
   const [isLoading, setIsLoading] = useState(false);
-  const [songLyric, setSongLyric] = useState([]);
+  const [songLyric, setSongLyric] = useState<Slide[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [videoBackgroundPath, setVideoBackgroundPath] = useState('');
   const [videoSrcBlog, setVideoSrcBlog] = useState('');
@@ -22,6 +23,8 @@ function LyricsDisplayPage() {
   const [customBackground, setCustomBackground] = useState<string>('');
   const [logoPath, setLogoPath] = useState<string>('/images/logo.svg');
   const [backgroundType, setBackgroundType] = useState<string>('gradient');
+  const [transitionType, setTransitionType] = useState('fade');
+  const [transitionSpeed, setTransitionSpeed] = useState(0.5);
 
   // Load settings, theme, and lyrics
   useEffect(() => {
@@ -37,6 +40,8 @@ function LyricsDisplayPage() {
       const savedGradientStart = await api?.getSetting('gradientStart');
       const savedGradientEnd = await api?.getSetting('gradientEnd');
       const savedBackgroundImage = await api?.getSetting('backgroundImage');
+      const transitionTypeSetting = await api?.getSetting('transitionType');
+      const transitionSpeedSetting = await api?.getSetting('transitionSpeed');
 
       console.log('⚙️ Lyrics: Loaded settings:', {
         showPaginationSetting,
@@ -50,10 +55,14 @@ function LyricsDisplayPage() {
         savedGradientStart,
         savedGradientEnd,
         savedBackgroundImage,
+        transitionTypeSetting,
+        transitionSpeedSetting,
       });
 
       if (showPaginationSetting !== undefined) setShowPagination(showPaginationSetting);
       if (showLogoSetting !== undefined) setShowLogo(showLogoSetting);
+      if (transitionTypeSetting) setTransitionType(transitionTypeSetting);
+      if (transitionSpeedSetting) setTransitionSpeed(transitionSpeedSetting);
       if (logoPathSetting) {
         if (logoPathSetting === 'logo.svg') {
           setLogoPath('/images/logo.svg');
@@ -185,7 +194,7 @@ function LyricsDisplayPage() {
           is_default: prev?.is_default || false,
           created_at: prev?.created_at || new Date().toISOString(),
           // Map the new properties - use incoming data first
-          font_family: themeData.fontFamily || prev?.font_family || 'Montserrat',
+          font_family: themeData.fontFamily || prev?.body_font_family || 'Montserrat',
           font_size: themeData.fontSize || prev?.font_size || 48,
           font_weight: themeData.fontWeight || prev?.font_weight || 600,
           text_color: themeData.textColor || prev?.text_color || '#FFFFFF',
@@ -307,7 +316,7 @@ function LyricsDisplayPage() {
 
   const textStyle: React.CSSProperties = currentTheme
     ? {
-        fontFamily: currentTheme.font_family,
+        fontFamily: currentTheme.body_font_family,
         fontSize: `${currentTheme.font_size}px`,
         fontWeight: currentTheme.font_weight,
         color: currentTheme.text_color,
@@ -323,9 +332,7 @@ function LyricsDisplayPage() {
         textShadow: '2px 2px 8px rgba(0, 0, 0, 0.9)',
       };
 
-  const animation = currentTheme
-    ? getAnimationVariant(currentTheme.animation_type)
-    : getAnimationVariant('fade');
+  const animation = getAnimationVariant(transitionType);
 
   // Debug: Log text style on render
   console.log('🎨 Lyrics: Rendering with textStyle:', textStyle);
@@ -370,10 +377,10 @@ function LyricsDisplayPage() {
                 <motion.div
                   key={activeIndex}
                   {...animation}
-                  transition={{ duration: 0.6, ease: 'easeInOut' }}
+                  transition={{ duration: transitionSpeed, ease: 'easeInOut' }}
                   style={textStyle}
                   className='mx-auto max-w-6xl leading-tight'>
-                  {songLyric[activeIndex]}
+                  {songLyric[activeIndex]?.text}
                 </motion.div>
               )}
             </AnimatePresence>
@@ -399,7 +406,7 @@ function LyricsDisplayPage() {
                     transition={{ duration: 0.4, ease: 'easeInOut' }}
                     className='text-center text-3xl text-white/60'
                     style={{ fontFamily: textStyle.fontFamily }}>
-                    {songLyric[activeIndex + 1]}
+                    {songLyric[activeIndex + 1]?.text}
                   </motion.p>
                 </AnimatePresence>
               </div>

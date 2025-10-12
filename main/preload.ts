@@ -47,10 +47,14 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.invoke('fetch-lyrics-by-url', { url, source }),
   suggestThemeColors: (lyrics: string) =>
     ipcRenderer.invoke('suggest-theme-colors', { lyrics }),
-  suggestBibleVerses: (lyrics: string) =>
-    ipcRenderer.invoke('suggest-bible-verses', { lyrics }),
-  suggestTheme: () => ipcRenderer.invoke('suggest-theme'),
-
+          suggestBibleVerses: (lyrics: string, theme?: string) =>
+            ipcRenderer.invoke('suggest-bible-verses', { lyrics, theme }),    suggestTheme: () => ipcRenderer.invoke('suggest-theme'),
+    suggestBackgroundMedia: (lyrics: string) => ipcRenderer.invoke('suggest-background-media', { lyrics }),
+  searchPexelsImages: (query: string) => ipcRenderer.invoke('search-pexels-images', { query }),
+  searchPexelsVideos: (query: string) => ipcRenderer.invoke('search-pexels-videos', { query }),
+  suggestFontPairing: (genre: string, mood: string) => ipcRenderer.invoke('suggest-font-pairing', { genre, mood }),
+  discoverSongs: (query: string) => ipcRenderer.invoke('discover-songs', { query }),
+  generateChords: (lyrics: string) => ipcRenderer.invoke('generate-chords', { lyrics }),
   // Settings
   getSetting: (key: string) => ipcRenderer.invoke('get-setting', key),
   setSetting: (key: string, value: any) => ipcRenderer.invoke('set-setting', { key, value }),

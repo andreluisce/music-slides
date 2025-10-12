@@ -177,7 +177,7 @@ export async function findByAnyParameter(searchTerm: string): Promise<any[]> {
       return [];
     }
 
-    const hasResults = await waitForSelector(page, '.list--songs li, .gs-result', 5000);
+    const hasResults = await waitForSelector(page, '.list--songs li, .gs-result', 10000);
     if (!hasResults) {
       return [];
     }

@@ -25,7 +25,7 @@ import { createQuickScreen, showQuickScreen, hideQuickScreen } from './helpers/q
 import sanitize from 'sanitize-filename';
 import fse from 'fs-extra';
 import createTouchBarLyrics from './helpers/create-touchbar-items';
-import { SearchType } from '../renderer/shared/types';
+import { SearchType, Slide } from './shared/types';
 import { logError } from './helpers/file-system';
 
 let lyricsWindow: BrowserWindow;
@@ -33,7 +33,7 @@ let lyricsSettingsWindow: BrowserWindow;
 let mainWindow: BrowserWindow;
 let videoPlayerWindow: BrowserWindow;
 let videoControlWindow: BrowserWindow;
-let lastLoadedLyrics: string[] | null = null;
+let lastLoadedLyrics: Slide[] | null = null;
 
 const isProd: boolean = process.env.NODE_ENV === 'production';
 
@@ -45,6 +45,9 @@ if (isProd) {
 
 (async () => {
   await app.whenReady();
+
+  const { migrateOldSongsToNewStructure } = await import('./helpers/file-system');
+  await migrateOldSongsToNewStructure();
 
   mainWindow = createWindow('main', {
     width: 800,
@@ -314,26 +317,16 @@ ipcMain.handle('get-lyric-by-url-handle', async (event, { url }) => {
 
   const response = await lyrics.searchByTitleAndArtistExact({ artist, title });
 
-  const lyricArray: Array<string> = response.lyrics
-    .replaceAll('/', '\n')
-    .replace('\\', '\n')
-    .split('\n')
-    .map(text => text.trim())
-    .filter(Boolean);
+  const { getAnalyzedSlides } = await import('./helpers/song-analyzer');
+  const lyricArray = await getAnalyzedSlides(artist, title, response.lyrics);
 
-  const documentsPath = app.getPath('documents');
-  const filename = sanitize(`${artist} - ${title}.txt`);
-
-  const fileFullPath = `${documentsPath}/lyrics-slide-show/songs/${filename}`;
-
-  const pathExists = await fse.pathExists(fileFullPath);
-
-  if (!pathExists) {
-    await fse.outputFile(fileFullPath, lyricArray.join('\n'));
+  const { saveSong, songExists } = await import('./helpers/file-system');
+  if (!(await songExists(artist, title))) {
+    await saveSong(artist, title, response.lyrics);
   }
 
   if (lyricsWindow && !lyricsWindow.isDestroyed()) {
-    lyricsWindow.setTouchBar(createTouchBarLyrics(lyricsWindow, lyricArray));
+    lyricsWindow.setTouchBar(createTouchBarLyrics(lyricsWindow, lyricArray.map(l => l.text)));
     lyricsWindow.focus();
   }
 
@@ -357,22 +350,27 @@ ipcMain.handle('get-lyric-by-url-handle', async (event, { url }) => {
 ipcMain.handle('get-lyric-by-file-path', async (event, { filePath, isDefault = false }) => {
   const documentsPath = app.getPath('documents');
 
-  const fileContent = await fse.readFile(
-    `${documentsPath}/lyrics-slide-show/${isDefault ? 'default-slides' : 'songs'}/${filePath}`,
-    {
-      encoding: 'utf8',
-    }
-  );
+  const fullPath = `${documentsPath}/lyrics-slide-show/${isDefault ? 'default-slides' : 'songs'}/${filePath}`;
+  const fileContent = await fse.readFile(fullPath, { encoding: 'utf8' });
 
-  // Parse the file content to separate frontmatter from lyrics
-  const { parseSongFileContent } = await import('./helpers/file-system');
-  const { lyrics } = parseSongFileContent(fileContent);
+  console.log('Reading file:', fullPath);
 
-  // Split lyrics into lines and filter empty ones
-  const lyricArray = lyrics.split('\n').filter(line => line.trim() !== '');
+  const { parseSongFileContent, parseFrontmatterFileContent } = await import('./helpers/file-system');
+  let lyricsData;
+
+  if (filePath.endsWith('.json')) {
+    lyricsData = parseSongFileContent(fileContent);
+  } else {
+    lyricsData = parseFrontmatterFileContent(fileContent);
+  }
+
+  const { lyrics: rawLyrics, metadata } = lyricsData;
+
+  const { getAnalyzedSlides } = await import('./helpers/song-analyzer');
+  const lyricArray = await getAnalyzedSlides(metadata.artist, metadata.title, rawLyrics);
 
   if (lyricsWindow && !lyricsWindow.isDestroyed()) {
-    lyricsWindow.setTouchBar(createTouchBarLyrics(lyricsWindow, lyricArray));
+    lyricsWindow.setTouchBar(createTouchBarLyrics(lyricsWindow, lyricArray.map(l => l.text)));
   }
 
   // Cache and send to settings window
@@ -448,13 +446,43 @@ ipcMain.handle('suggest-theme-colors', async (_event, { lyrics: lyricsText }) =>
   return lyrics.suggestThemeColors(lyricsText);
 });
 
-ipcMain.handle('suggest-bible-verses', async (_event, { lyrics: lyricsText }) => {
-  return lyrics.suggestBibleVerses(lyricsText);
+ipcMain.handle('suggest-bible-verses', async (_event, { lyrics: lyricsText, theme }) => {
+  return lyrics.suggestBibleVerses(lyricsText, theme);
 });
 
 ipcMain.handle('suggest-theme', async () => {
   const { suggestTheme } = await import('./helpers/ai-service');
   return suggestTheme();
+});
+
+ipcMain.handle('suggest-background-media', async (_event, { lyrics }) => {
+  const { suggestBackgroundMedia } = await import('./helpers/ai-service');
+  return suggestBackgroundMedia(lyrics);
+});
+
+ipcMain.handle('search-pexels-images', async (_event, { query }) => {
+  const { searchImages } = await import('./helpers/pexels');
+  return searchImages(query);
+});
+
+ipcMain.handle('search-pexels-videos', async (_event, { query }) => {
+  const { searchVideos } = await import('./helpers/pexels');
+  return searchVideos(query);
+});
+
+ipcMain.handle('suggest-font-pairing', async (_event, { genre, mood }) => {
+  const { suggestFontPairing } = await import('./helpers/ai-service');
+  return suggestFontPairing(genre, mood);
+});
+
+ipcMain.handle('discover-songs', async (_event, { query }) => {
+  const { discoverSongs } = await import('./helpers/ai-service');
+  return discoverSongs(query);
+});
+
+ipcMain.handle('generate-chords', async (_event, { lyrics }) => {
+  const { generateChords } = await import('./helpers/ai-service');
+  return generateChords(lyrics);
 });
 
 ipcMain.handle('get-setting', async (_event, key) => {

@@ -1,3 +1,5 @@
+import { Slide } from '../../../main/shared/types';
+
 export {};
 
 declare global {
@@ -9,12 +11,12 @@ declare global {
       getDefaultSlides: () => Promise<string[]>;
       getBackgroundVideos: () => Promise<string[]>;
       findLyrics: (searchType: string, artist: string, title: string) => Promise<any>;
-      getLyricByFilePath: (filePath: string, isDefault?: boolean) => Promise<string[]>;
-      getLyricByUrlHandle: (url: string) => Promise<string[]>;
+      getLyricByFilePath: (filePath: string, isDefault?: boolean) => Promise<Slide[]>;
+      getLyricByUrlHandle: (url: string) => Promise<Slide[]>;
       onSlideClicked: (cb: (idx: number) => void) => void;
       onSlideClickedIndex: (cb: (idx: number) => void) => void;
       onSelectedVideoBackground: (cb: (videoPath: string) => void) => void;
-      onLoadedLyrics: (cb: (lyrics: string[]) => void) => void;
+      onLoadedLyrics: (cb: (lyrics: Slide[]) => void) => void;
       selectVideoBackground: (windowId: number, videoPath: string) => void;
       setActiveSlide: (windowId: number, index: number) => void;
       focusTargetWindow: (windowId: number) => void;
@@ -34,7 +36,13 @@ declare global {
         metadata?: any;
       } | null>;
       suggestThemeColors: (lyrics: string) => Promise<any>;
-      suggestBibleVerses: (lyrics: string) => Promise<any>;
+      suggestBibleVerses: (lyrics: string, theme?: string) => Promise<any>;
+      suggestBackgroundMedia: (lyrics: string) => Promise<string[]>;
+      searchPexelsImages: (query: string) => Promise<any>;
+      searchPexelsVideos: (query: string) => Promise<any>;
+      suggestFontPairing: (genre: string, mood: string) => Promise<{ titleFont: string; bodyFont: string }>;
+      discoverSongs: (query: string) => Promise<{ title: string; artist: string }[]>;
+      generateChords: (lyrics: string) => Promise<string>;
       getBibleVerse: (book: string, chapter: number, verse: number, version: string) => Promise<any>;
       getVideoBase64: (videoPath: string) => Promise<string | null>;
       setCustomBackground: (windowId: number, background: any) => void;

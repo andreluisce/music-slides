@@ -24,9 +24,9 @@ export async function getAllSongsGroupedByArtist(): Promise<{
     if (stats.isDirectory()) {
       const songFiles = await fse.readdir(artistPath);
       const songs = songFiles
-        .filter(file => file.endsWith('.txt'))
+        .filter(file => file.endsWith('.json'))
         .map(file => {
-          const normalizedTitle = file.replace('.txt', '');
+          const normalizedTitle = file.replace('.json', '');
           return {
             title: normalizedTitle.replace(/-/g, ' '), // Desnormaliza para exibição
             normalizedTitle,
@@ -143,10 +143,11 @@ export async function migrateOldSongsToNewStructure(): Promise<{
       }
 
       // Lê o conteúdo
-      const lyrics = await fse.readFile(filePath, 'utf8');
+      const content = await fse.readFile(filePath, 'utf8');
+      const { lyrics, metadata } = parseFrontmatterFileContent(content);
 
       // Salva no novo formato
-      await saveSong(artist, title, lyrics);
+      await saveSong(artist, title, lyrics, metadata);
 
       // Remove o arquivo antigo
       await fse.remove(filePath);
@@ -209,7 +210,7 @@ export function getArtistFolderPath(artist: string): string {
 export function getSongFilePath(artist: string, title: string): string {
   const artistFolder = getArtistFolderPath(artist);
   const normalizedTitle = normalizeNameForFileSystem(title);
-  return `${artistFolder}/${normalizedTitle}.txt`;
+  return `${artistFolder}/${normalizedTitle}.json`;
 }
 
 /**
@@ -221,7 +222,7 @@ export async function songExists(artist: string, title: string): Promise<boolean
 }
 
 /**
- * Cria o conteúdo do arquivo com frontmatter (formato MDX)
+ * Cria o conteúdo do arquivo em formato JSON
  */
 export function createSongFileContent(
   artist: string,
@@ -238,35 +239,31 @@ export function createSongFileContent(
 ): string {
   const now = new Date().toISOString().split('T')[0];
 
-  const frontmatter = {
+  const songData = {
     title,
     artist,
+    lyrics,
     createdAt: now,
     updatedAt: now,
     ...metadata,
   };
 
-  const yamlContent = Object.entries(frontmatter)
-    .map(([key, value]) => {
-      if (typeof value === 'string' && (value.includes(':') || value.includes('\n'))) {
-        // Escape strings com : ou quebras de linha
-        return `${key}: "${value.replace(/"/g, '\\"')}"`;
-      }
-      return `${key}: ${value}`;
-    })
-    .join('\n');
-
-  return `---
-${yamlContent}
----
-
-${lyrics}`;
+  return JSON.stringify(songData, null, 2);
 }
 
 /**
- * Parse do conteúdo do arquivo com frontmatter
+ * Parse do conteúdo do arquivo JSON
  */
 export function parseSongFileContent(content: string): {
+  metadata: Record<string, any>;
+  lyrics: string;
+} {
+  const songData = JSON.parse(content);
+  const { lyrics, ...metadata } = songData;
+  return { metadata, lyrics };
+}
+
+export function parseFrontmatterFileContent(content: string): {
   metadata: Record<string, any>;
   lyrics: string;
 } {

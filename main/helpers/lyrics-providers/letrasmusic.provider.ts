@@ -43,6 +43,7 @@ export async function searchByTitleAndArtist({
     }
 
     await handleAdBlockerModal(page);
+    await handleConsentModal(page);
 
     // Wait for search results - try multiple selectors
     let hasResults = await waitForSelector(page, '.cnt-list-songs a', 3000);

@@ -42,7 +42,8 @@ const animationTypes = ['fade', 'slide', 'zoom', 'none'];
 
 export default function ThemeModal({ isOpen, onClose, onSave, theme }: ThemeModalProps) {
   const [name, setName] = useState('');
-  const [fontFamily, setFontFamily] = useState('Open Sans');
+  const [titleFontFamily, setTitleFontFamily] = useState('Open Sans');
+  const [bodyFontFamily, setBodyFontFamily] = useState('Open Sans');
   const [fontSize, setFontSize] = useState(48);
   const [fontWeight, setFontWeight] = useState(600);
   const [textColor, setTextColor] = useState('#FFFFFF');
@@ -51,11 +52,14 @@ export default function ThemeModal({ isOpen, onClose, onSave, theme }: ThemeModa
   const [backgroundPosition, setBackgroundPosition] = useState('center');
   const [animationType, setAnimationType] = useState('fade');
   const [isSaving, setIsSaving] = useState(false);
+  const [selectedGenre, setSelectedGenre] = useState('Worship');
+  const [selectedMood, setSelectedMood] = useState('Joyful');
 
   useEffect(() => {
     if (theme) {
       setName(theme.name);
-      setFontFamily(theme.font_family);
+      setTitleFontFamily(theme.title_font_family);
+      setBodyFontFamily(theme.body_font_family);
       setFontSize(theme.font_size);
       setFontWeight(theme.font_weight);
       setTextColor(theme.text_color);
@@ -65,7 +69,8 @@ export default function ThemeModal({ isOpen, onClose, onSave, theme }: ThemeModa
       setAnimationType(theme.animation_type);
     } else {
       setName('');
-      setFontFamily('Open Sans');
+      setTitleFontFamily('Open Sans');
+      setBodyFontFamily('Open Sans');
       setFontSize(48);
       setFontWeight(600);
       setTextColor('#FFFFFF');
@@ -83,7 +88,8 @@ export default function ThemeModal({ isOpen, onClose, onSave, theme }: ThemeModa
     try {
       const themeData = {
         name: name.trim(),
-        font_family: fontFamily,
+        title_font_family: titleFontFamily,
+        body_font_family: bodyFontFamily,
         font_size: fontSize,
         font_weight: fontWeight,
         text_color: textColor,
@@ -111,8 +117,17 @@ export default function ThemeModal({ isOpen, onClose, onSave, theme }: ThemeModa
 
   if (!isOpen) return null;
 
-  const previewStyle: React.CSSProperties = {
-    fontFamily,
+  const previewTitleStyle: React.CSSProperties = {
+    fontFamily: titleFontFamily,
+    fontSize: `${fontSize * 1.2}px`,
+    fontWeight,
+    color: textColor,
+    textShadow,
+    WebkitTextStroke: textOutline !== 'none' ? textOutline : undefined,
+  };
+
+  const previewBodyStyle: React.CSSProperties = {
+    fontFamily: bodyFontFamily,
     fontSize: `${fontSize}px`,
     fontWeight,
     color: textColor,
@@ -150,15 +165,65 @@ export default function ThemeModal({ isOpen, onClose, onSave, theme }: ThemeModa
               />
             </div>
 
+            {/* AI Font Pairing Suggestion */}
+            <div>
+              <Label className='text-slate-300'>Sugestão de Fontes AI</Label>
+              <div className="flex gap-2 mt-1">
+                <select id="genre" value={selectedGenre} onChange={(e) => setSelectedGenre(e.target.value)} className='w-full rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-white focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50'>
+                  <option>Worship</option>
+                  <option>Gospel</option>
+                  <option>Hymn</option>
+                  <option>Pop</option>
+                  <option>Rock</option>
+                </select>
+                <select id="mood" value={selectedMood} onChange={(e) => setSelectedMood(e.target.value)} className='w-full rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-white focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50'>
+                  <option>Joyful</option>
+                  <option>Reflective</option>
+                  <option>Powerful</option>
+                  <option>Calm</option>
+                  <option>Celebratory</option>
+                </select>
+              </div>
+              <Button
+                size="sm"
+                className='w-full mt-2 bg-gradient-to-r from-blue-600 to-teal-600 hover:from-blue-700 hover:to-teal-700'
+                onClick={async () => {
+                  const pairing = await window.api.suggestFontPairing(selectedGenre, selectedMood);
+                  if (pairing) {
+                    setTitleFontFamily(pairing.titleFont);
+                    setBodyFontFamily(pairing.bodyFont);
+                  }
+                }}>
+                Sugerir Fontes
+              </Button>
+            </div>
+
             {/* Font Family */}
             <div>
-              <Label htmlFor='fontFamily' className='text-slate-300'>
-                Fonte
+              <Label htmlFor='titleFontFamily' className='text-slate-300'>
+                Fonte do Título
               </Label>
               <select
-                id='fontFamily'
-                value={fontFamily}
-                onChange={(e) => setFontFamily(e.target.value)}
+                id='titleFontFamily'
+                value={titleFontFamily}
+                onChange={(e) => setTitleFontFamily(e.target.value)}
+                className='mt-1 w-full rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-white focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50'>
+                {fontFamilies.map((font) => (
+                  <option key={font} value={font} className='bg-slate-800 text-white'>
+                    {font}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <Label htmlFor='bodyFontFamily' className='text-slate-300'>
+                Fonte do Corpo
+              </Label>
+              <select
+                id='bodyFontFamily'
+                value={bodyFontFamily}
+                onChange={(e) => setBodyFontFamily(e.target.value)}
                 className='mt-1 w-full rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-white focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50'>
                 {fontFamilies.map((font) => (
                   <option key={font} value={font} className='bg-slate-800 text-white'>
@@ -260,9 +325,9 @@ export default function ThemeModal({ isOpen, onClose, onSave, theme }: ThemeModa
           <div className='flex flex-col'>
             <Label className='mb-2 text-slate-300'>Preview</Label>
             <div className='flex flex-1 items-center justify-center rounded-xl border border-white/10 bg-black p-8'>
-              <div style={previewStyle} className='text-center'>
-                <p>Amazing Grace</p>
-                <p className='mt-4 text-[0.6em] opacity-70'>How sweet the sound</p>
+              <div className='text-center'>
+                <p style={previewTitleStyle}>Amazing Grace</p>
+                <p style={previewBodyStyle} className='mt-4 opacity-70'>How sweet the sound</p>
               </div>
             </div>
           </div>

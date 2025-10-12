@@ -172,7 +172,7 @@ export default function Themes() {
                 <div className='mb-3 flex h-24 items-center justify-center rounded-md border border-white/10 bg-black p-3'>
                   <p
                     style={{
-                      fontFamily: theme.font_family,
+                      fontFamily: theme.body_font_family,
                       fontSize: `${theme.font_size * 0.3}px`,
                       fontWeight: theme.font_weight,
                       color: theme.text_color,
@@ -184,7 +184,8 @@ export default function Themes() {
 
                 {/* Info */}
                 <div className='mb-3 space-y-0.5 text-xs text-slate-400'>
-                  <p>Fonte: {theme.font_family}</p>
+                  <p>Fonte Título: {theme.title_font_family}</p>
+                  <p>Fonte Corpo: {theme.body_font_family}</p>
                   <p>Tamanho: {theme.font_size}px</p>
                   <p>Animação: {theme.animation_type}</p>
                 </div>
