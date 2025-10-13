@@ -443,6 +443,12 @@ if (isProd) {
     return syncSongFromCloud(artist, title);
   });
 
+  ipcMain.on('send-search-progress', (_event, message: string) => {
+    if (mainWindow) {
+      mainWindow.webContents.send('search-progress', message);
+    }
+  });
+
   console.log('✅ All IPC handlers registered');
 
   // ===================================================================

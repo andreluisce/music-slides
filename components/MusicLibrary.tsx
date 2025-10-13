@@ -71,8 +71,16 @@ function SearchForm({ isSearching, setFoundRemoteSongs, setIsSearching }: Search
   const [fetchingLyrics, setFetchingLyrics] = useState(false);
   const [searchError, setSearchError] = useState('');
   const [searchSuccess, setSearchSuccess] = useState(false);
+  const [searchProgressMessage, setSearchProgressMessage] = useState('');
 
-  const submitForm = async (event: React.FormEvent<HTMLFormElement>) => {
+  useEffect(() => {
+    if (api) {
+      const cleanup = api.onSearchProgress((message) => {
+        setSearchProgressMessage(message);
+      });
+      return cleanup;
+    }
+  }, []);
     event.preventDefault();
     setFoundRemoteSongs([]);
     setSearchResults([]);
@@ -169,7 +177,7 @@ function SearchForm({ isSearching, setFoundRemoteSongs, setIsSearching }: Search
               <div className='h-5 w-5 animate-spin rounded-full border-2 border-blue-400 border-t-transparent' />
               <div className='flex-1'>
                 <p className='text-sm font-semibold text-blue-300'>
-                  Buscando músicas...
+                  {searchProgressMessage || 'Buscando músicas...'}
                 </p>
                 <p className='text-xs text-blue-400/70'>
                   Procurando nos nossos servidores e na internet

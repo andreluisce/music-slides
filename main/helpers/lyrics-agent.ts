@@ -14,6 +14,7 @@ import {
   getSupabaseClient,
 } from './supabase-sync';
 import { createClient } from '@supabase/supabase-js';
+import { ipcMain } from 'electron';
 
 export interface LyricsSearchResult {
   lyrics: string;
@@ -38,6 +39,7 @@ export interface SongSearchResult {
  */
 export async function intelligentLyricsSearch(userQuery: string): Promise<LyricsSearchResult | null> {
   logSection('INTELLIGENT LYRICS SEARCH');
+  ipcMain.send('send-search-progress', 'Iniciando busca inteligente de letras...');
   console.log('📝 Query:', userQuery);
 
   const { artist, title } = await resolveQuery(userQuery);
@@ -50,17 +52,21 @@ export async function intelligentLyricsSearch(userQuery: string): Promise<Lyrics
   ];
 
   for (const [label, action] of levels) {
+    ipcMain.send('send-search-progress', `Verificando ${label}...`);
     logSection(label);
     const result = await safeRun(action, `Error in ${label}`);
     if (result) {
       console.log(`✅ Found at ${label}`);
+      ipcMain.send('send-search-progress', `Letra encontrada em ${label}.`);
       await persistResult(result, label !== 'Supabase Cache');
       return result;
     }
     console.log(`❌ Not found in ${label}`);
+    ipcMain.send('send-search-progress', `Não encontrada em ${label}.`);
   }
 
   console.log('\n🚫 No lyrics found in any source.');
+  ipcMain.send('send-search-progress', 'Nenhuma letra encontrada em nenhuma fonte.');
   return null;
 }
 
@@ -201,8 +207,12 @@ async function safeRun<T>(fn: () => Promise<T>, label: string): Promise<T | null
 
 export async function fastLyricsSearch(userQuery: string): Promise<SongSearchResult[]> {
   console.log('⚡ Performing fast lyrics search for:', userQuery);
+  ipcMain.send('send-search-progress', 'Iniciando busca rápida de letras...');
   const { artist, title } = await resolveQuery(userQuery);
-  if (!artist && !title) return [];
+  if (!artist && !title) {
+    ipcMain.send('send-search-progress', 'Consulta inválida para busca rápida.');
+    return [];
+  }
 
   const allResults: SongSearchResult[] = [];
   const seenSongs = new Set<string>(); // For deduplication
@@ -213,6 +223,7 @@ export async function fastLyricsSearch(userQuery: string): Promise<SongSearchRes
 
   for (const src of sources) {
     try {
+      ipcMain.send('send-search-progress', `Buscando em ${src.name}...`);
       console.log(`🌐 Trying fast search with ${src.name}...`);
       const results = await src.fn({ artist, title });
       if (results && Array.isArray(results)) {
@@ -229,12 +240,15 @@ export async function fastLyricsSearch(userQuery: string): Promise<SongSearchRes
             allResults.push(r);
           }
         });
+        ipcMain.send('send-search-progress', `Encontrados ${mappedResults.length} resultados em ${src.name}.`);
       }
     } catch (err: any) {
       console.log(`❌ Fast search with ${src.name} failed:`, err.message);
+      ipcMain.send('send-search-progress', `Falha ao buscar em ${src.name}.`);
     }
   }
 
+  ipcMain.send('send-search-progress', `Busca rápida concluída. Total de ${allResults.length} resultados.`);
   return allResults;
 }
 

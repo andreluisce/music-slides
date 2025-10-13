@@ -120,6 +120,11 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.on('theme-update', listener);
     return () => ipcRenderer.removeListener('theme-update', listener);
   },
+  onSearchProgress: (callback: (message: string) => void) => {
+    const listener = (_: IpcRendererEvent, message: string) => callback(message);
+    ipcRenderer.on('search-progress', listener);
+    return () => ipcRenderer.removeListener('search-progress', listener);
+  },
 
   // Error reporting
   reportRendererError: (errorDetails: any) => {
