@@ -198,3 +198,65 @@ async function safeRun<T>(fn: () => Promise<T>, label: string): Promise<T | null
     return null;
   }
 }
+
+export async function fastLyricsSearch(userQuery: string): Promise<SongSearchResult[]> {
+  console.log('⚡ Performing fast lyrics search for:', userQuery);
+  const { artist, title } = await resolveQuery(userQuery);
+  if (!artist && !title) return [];
+
+  const allResults: SongSearchResult[] = [];
+  const sources = [
+    { name: 'letrasmusic', fn: providers.letrasmusic.searchByTitleAndArtist },
+    { name: 'cifraclub', fn: providers.cifraclub.searchByTitleAndArtist },
+  ];
+
+  for (const src of sources) {
+    try {
+      console.log(`🌐 Trying fast search with ${src.name}...`);
+      const results = await src.fn({ artist, title });
+      if (results && Array.isArray(results)) {
+        const mappedResults = results.map(r => ({
+          title: r.title,
+          artist: r.artist,
+          url: r.url,
+          source: src.name as 'letrasmusic' | 'cifraclub',
+        }));
+        allResults.push(...mappedResults);
+      }
+    } catch (err: any) {
+      console.log(`❌ Fast search with ${src.name} failed:`, err.message);
+    }
+  }
+
+  return allResults;
+}
+
+export async function fetchLyricsByUrl(url: string, source: string): Promise<LyricsSearchResult | null> {
+  console.log(`📥 Fetching lyrics from URL: ${url} (Source: ${source})`);
+  let result: LyricsSearchResult | null = null;
+
+  try {
+    switch (source) {
+      case 'letrasmusic':
+        result = await providers.letrasmusic.getLyrics(url);
+        break;
+      case 'cifraclub':
+        result = await providers.cifraclub.getLyrics(url);
+        break;
+      // Add other providers here as needed
+      default:
+        console.warn(`Unknown lyrics source: ${source}`);
+        return null;
+    }
+
+    if (result?.lyrics) {
+      // Optionally persist the fetched lyrics to local/supabase cache
+      await persistResult(result, true);
+      return result;
+    }
+  } catch (err: any) {
+    console.error(`Error fetching lyrics from ${source} (${url}):`, err.message);
+  }
+
+  return null;
+}
