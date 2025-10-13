@@ -81,6 +81,7 @@ function SearchForm({ isSearching, setFoundRemoteSongs, setIsSearching }: Search
       return cleanup;
     }
   }, []);
+  const submitForm = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setFoundRemoteSongs([]);
     setSearchResults([]);
