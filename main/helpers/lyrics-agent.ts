@@ -205,6 +205,7 @@ export async function fastLyricsSearch(userQuery: string): Promise<SongSearchRes
   if (!artist && !title) return [];
 
   const allResults: SongSearchResult[] = [];
+  const seenSongs = new Set<string>(); // For deduplication
   const sources = [
     { name: 'letrasmusic', fn: providers.letrasmusic.searchByTitleAndArtist },
     { name: 'cifraclub', fn: providers.cifraclub.searchByTitleAndArtist },
@@ -221,7 +222,13 @@ export async function fastLyricsSearch(userQuery: string): Promise<SongSearchRes
           url: r.url,
           source: src.name as 'letrasmusic' | 'cifraclub',
         }));
-        allResults.push(...mappedResults);
+        mappedResults.forEach(r => {
+          const key = `${r.title}-${r.artist}-${r.url}`;
+          if (!seenSongs.has(key)) {
+            seenSongs.add(key);
+            allResults.push(r);
+          }
+        });
       }
     } catch (err: any) {
       console.log(`❌ Fast search with ${src.name} failed:`, err.message);
