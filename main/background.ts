@@ -159,7 +159,9 @@ if (isProd) {
   ipcMain.handle('fetch-lyrics-by-url', async (_event, { url, source }) => {
     console.log('📥 Fetch lyrics by URL:', url);
     const { fetchLyricsByUrl } = await import('./helpers/lyrics-agent');
-    return fetchLyricsByUrl(url, source);
+    return fetchLyricsByUrl(url, source, (message) => {
+      _event.sender.send('search-progress', message);
+    });
   });
 
   ipcMain.handle('suggest-theme-colors', async (_event, { lyrics: lyricsText }) => {

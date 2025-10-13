@@ -251,31 +251,38 @@ export async function fastLyricsSearch(userQuery: string, progressCallback?: (me
   return allResults;
 }
 
-export async function fetchLyricsByUrl(url: string, source: string): Promise<LyricsSearchResult | null> {
+export async function fetchLyricsByUrl(url: string, source: string, progressCallback?: (message: string) => void): Promise<LyricsSearchResult | null> {
   console.log(`📥 Fetching lyrics from URL: ${url} (Source: ${source})`);
+  progressCallback?.(`Iniciando busca da letra por URL em ${source}...`);
   let result: LyricsSearchResult | null = null;
 
   try {
     switch (source) {
       case 'letrasmusic':
+        progressCallback?.('Buscando letra em Letras.mus.br...');
         result = await providers.letrasmusic.getLyrics(url);
         break;
       case 'cifraclub':
+        progressCallback?.('Buscando letra em CifraClub...');
         result = await providers.cifraclub.getLyrics(url);
         break;
       // Add other providers here as needed
       default:
         console.warn(`Unknown lyrics source: ${source}`);
+        progressCallback?.(`Fonte de letra desconhecida: ${source}.`);
         return null;
     }
 
     if (result?.lyrics) {
+      progressCallback?.('Letra encontrada. Persistindo dados...');
       // Optionally persist the fetched lyrics to local/supabase cache
       await persistResult(result, true);
+      progressCallback?.('Letra carregada com sucesso!');
       return result;
     }
   } catch (err: any) {
     console.error(`Error fetching lyrics from ${source} (${url}):`, err.message);
+    progressCallback?.(`Erro ao carregar letra de ${source}.`);
   }
 
   return null;
