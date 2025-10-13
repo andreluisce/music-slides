@@ -3,7 +3,7 @@ import * as genius from './lyrics-providers/genius.provider';
 import * as lyricsovh from './lyrics-providers/lyricsovh.provider';
 import { interpretLyricsQuery, cleanLyrics } from './ai-service';
 import { getGeminiResponse } from './gemini';
-import { SearchType } from '../../renderer/shared/types';
+import { SearchType } from '../../shared/types';
 import { intelligentLyricsSearch } from './lyrics-agent';
 
 interface SongInfo {
@@ -30,9 +30,9 @@ export const formatLyrics = async (lyrics: string) => {
       - "emotion": The emotional tone of the slide (e.g., "joyful", "reflective", "powerful").
       - "layoutSuggestion": A suggestion for the layout (e.g., "centered-large-font", "bottom-aligned", "two-columns").
       - "duration": The estimated duration of the slide in seconds (e.g., 5.5).
-      
+
       Lyrics: """${lyrics}"""
-      
+
       Example of desired output format:
       [
         {
@@ -50,7 +50,7 @@ export const formatLyrics = async (lyrics: string) => {
           "duration": 10.0
         }
       ]
-      
+
       Return a valid JSON array only.`
     });
 
@@ -106,12 +106,12 @@ export const suggestThemeColors = async (lyrics: string) => {
   try {
     const colorPaletteResponse = await getGeminiResponse({
       prompt: `Analyze the mood and emotion of the following song lyrics, which are from a worship song (likely in Portuguese or English), and suggest a matching color palette for a presentation background. Return a JSON array of 3-5 hex color codes, suitable for a gradient or theme.
-      
+
       Lyrics: """${lyrics}"""
-      
+
       Example of desired output format:
       ["#RRGGBB", "#RRGGBB", "#RRGGBB"]
-      
+
       Return JSON array only.`
     });
 

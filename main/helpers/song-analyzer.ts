@@ -122,17 +122,28 @@ export async function getAdvancedSongAnalysis(
     if (await fse.pathExists(cachePath)) {
       console.log('🧠 Loading analysis from local cache:', cachePath);
       const cachedData = await fse.readJson(cachePath);
-      
-      // Check if it's the new format with advanced metadata
-      if (cachedData.version === '2.0') {
+
+      // Check if we have ai_analysis field (new structure)
+      if (cachedData.ai_analysis?.version === '2.0') {
+        console.log('✅ Loading from ai_analysis field');
+        // Update Supabase in the background
+        if (supabaseSong) {
+          updateSongInSupabase(supabaseSong.id, cachedData.ai_analysis);
+        }
+        return cachedData.ai_analysis;
+      }
+
+      // Check if it's the old format with data at root level
+      if (cachedData.version === '2.0' && !cachedData.ai_analysis) {
+        console.log('✅ Loading from root level (old format)');
         // Update Supabase in the background
         if (supabaseSong) {
           updateSongInSupabase(supabaseSong.id, cachedData);
         }
         return cachedData;
-      } else {
-        console.log('🔄 Old cache format found, regenerating with advanced metadata');
       }
+
+      console.log('🔄 Old cache format found, regenerating with advanced metadata');
     }
   } catch (error) {
     console.error('Error reading analysis cache:', error);
@@ -149,9 +160,28 @@ export async function getAdvancedSongAnalysis(
     }
 
     try {
-      await fse.writeJson(cachePath, analysis);
-      console.log('✅ Saved advanced analysis to local cache:', cachePath);
-      
+      // Read existing file to preserve lyrics and other data
+      let existingData = {};
+      if (await fse.pathExists(cachePath)) {
+        existingData = await fse.readJson(cachePath);
+      }
+
+      // Save with both root-level fields AND ai_analysis field
+      const dataToSave = {
+        ...existingData,
+        // Root level fields for backwards compatibility
+        metadata: analysis.metadata,
+        slides: analysis.slides,
+        version: analysis.version,
+        generatedBy: analysis.generatedBy,
+        lastAnalyzed: analysis.lastAnalyzed,
+        // ai_analysis field (new structure)
+        ai_analysis: analysis,
+      };
+
+      await fse.writeJson(cachePath, dataToSave);
+      console.log('✅ Saved advanced analysis to local cache (both root and ai_analysis):', cachePath);
+
       if (supabaseSong) {
         await updateSongInSupabase(supabaseSong.id, analysis);
         console.log('✅ Saved advanced analysis to Supabase:', `${artist} - ${title}`);
@@ -203,7 +233,7 @@ export async function updateSongAnalysis(
   updatedAnalysis: SongAnalysis
 ): Promise<void> {
   const cachePath = getAnalysisCachePath(artist, title);
-  
+
   // Mark as manually edited
   const finalAnalysis = {
     ...updatedAnalysis,
@@ -218,15 +248,23 @@ export async function updateSongAnalysis(
     // Read the existing song file
     const existingSongData = await fse.readJson(cachePath);
 
-    // Update the ai_analysis field with the new analysis
+    // Update BOTH the ai_analysis field (new structure)
+    // AND root-level fields (for backwards compatibility)
     const updatedSongData = {
       ...existingSongData,
+      // Update root level fields for backwards compatibility
+      metadata: finalAnalysis.metadata,
+      slides: finalAnalysis.slides,
+      version: finalAnalysis.version,
+      generatedBy: finalAnalysis.generatedBy,
+      lastAnalyzed: finalAnalysis.lastAnalyzed,
+      // Update ai_analysis field (new structure)
       ai_analysis: finalAnalysis,
     };
 
     // Save to local cache
     await fse.writeJson(cachePath, updatedSongData);
-    console.log('✅ Updated analysis in local cache:', cachePath);
+    console.log('✅ Updated analysis in local cache (both root and ai_analysis):', cachePath);
 
     // Update Supabase
     const supabaseSong = await getSongFromSupabase(artist, title);

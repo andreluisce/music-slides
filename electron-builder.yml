@@ -1,18 +1,46 @@
 appId: com.andrevangelista.lyricslideshow
 productName: Slides Lyrics
 copyright: Copyright © 2022 André Evangelista
+
 directories:
-  output: dist
+  output: dist_electron_builder
   buildResources: resources
+
 files:
-  - from: .
-    filter:
-      - package.json
-      - app
+  - dist/**
+  - dist-electron/**
+  - package.json
+  - node_modules/**/*
+
+asar: true
+asarUnpack:
+  - "**/*.node"
+
 extraResources:
   - from: resources
     to: resources
-publish: null
+
+artifactName: "${productName}-${version}-${os}-${arch}.${ext}"
+
+mac:
+  target:
+    - dmg
+    - zip
+  category: public.app-category.music
+  icon: resources/icon.icns
+
 win:
-  target: nsis
+  target:
+    - nsis
+    - portable
   icon: resources/icon.ico
+
+linux:
+  target:
+    - AppImage
+    - deb
+  category: Audio
+  icon: resources/icon.png
+
+extraMetadata:
+  main: dist-electron/background.js

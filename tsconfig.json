@@ -1,33 +1,35 @@
 {
   "compilerOptions": {
-    "target": "es5",
-    "lib": [
-      "dom",
-      "dom.iterable",
-      "esnext"
-    ],
-    "allowJs": true,
-    "skipLibCheck": true,
-    "strict": false,
-    "forceConsistentCasingInFileNames": true,
-    "noEmit": true,
-    "incremental": true,
+    "target": "ESNext",
+    "module": "ESNext",
+    "lib": ["DOM", "ESNext"],
+    "jsx": "react-jsx",
+    "moduleResolution": "Node",
     "esModuleInterop": true,
-    "module": "esnext",
-    "moduleResolution": "node",
+    "allowSyntheticDefaultImports": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "jsx": "preserve",
-    "baseUrl": "renderer",
+    "noEmit": true,
+    "baseUrl": ".",
     "paths": {
-      "components/*": ["components/*"],
-      "lib/utils": ["lib/utils"]
+      "@/*": ["*"],
+      "@main/*": ["main/*"],
+      "@shared/*": ["shared/*"]
     }
   },
+  "include": [
+    ".",
+    "main",
+    "shared",
+    "vite.config.ts"
+  ],
   "exclude": [
     "node_modules",
-    "renderer/next.config.js",
-    "app",
-    "dist"
+    "dist",
+    "dist-electron",
+    "dist_electron_builder"
   ]
 }

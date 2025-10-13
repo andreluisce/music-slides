@@ -88,7 +88,7 @@ Return ONLY valid JSON in this exact format:
   }
 }
 
-import type { Theme } from '../../renderer/lib/supabase';
+import type { Theme } from '../../lib/supabase';
 
 export async function suggestTheme(): Promise<Theme> {
   try {
@@ -185,12 +185,12 @@ export async function suggestBackgroundMedia(lyrics: string): Promise<string[]> 
     const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
 
     const prompt = `Analyze the following song lyrics from a Brazilian/Portuguese worship context and suggest 3-5 search terms for royalty-free background videos or images. The terms should capture the main themes, mood, and imagery of the song.
-    
+
     Lyrics:
     """${lyrics}"""
-    
+
     Return ONLY a valid JSON array of strings.
-    
+
     Example:
     ["ocean waves", "calm sea", "sunrise over water"]`;
 
@@ -255,11 +255,11 @@ export async function discoverSongs(query: string): Promise<{ title: string; art
     const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
 
     const prompt = `You are a worship music expert. Suggest 5-10 songs based on the following query. The query could be a theme, a mood, or a Bible verse.
-    
+
     Query: "${query}"
-    
+
     Return ONLY a valid JSON array of objects, where each object has 'title' and 'artist' properties.
-    
+
     Example:
     [
       { "title": "Oceans (Where Feet May Fail)", "artist": "Hillsong UNITED" },
@@ -291,13 +291,13 @@ export async function generateChords(lyrics: string): Promise<string> {
     const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
 
     const prompt = `Analyze the following song lyrics, which are from a worship song (likely in Portuguese or English), and add chords in the Chord Pro format. Place the chords in square brackets directly before the corresponding word.
-    
+
     Lyrics:
     """${lyrics}"""
-    
+
     Example:
     [G]Amazing [C]grace, how [G]sweet the [D]sound
-    
+
     Return ONLY the lyrics with embedded chords.`;
 
     const result = await model.generateContent(prompt);

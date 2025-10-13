@@ -5,6 +5,9 @@ contextBridge.exposeInMainWorld('api', {
   openLyricsWindow: (url?: string, filePath?: string, isDefault = false) => {
     ipcRenderer.send('open-lyrics-window', { url, filePath, isDefault });
   },
+  closeLyricsWindow: () => {
+    ipcRenderer.send('close-lyrics-window');
+  },
 
   // System paths
   getPath: (name: string) => ipcRenderer.invoke('get-path', { name }),
@@ -47,9 +50,10 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.invoke('fetch-lyrics-by-url', { url, source }),
   suggestThemeColors: (lyrics: string) =>
     ipcRenderer.invoke('suggest-theme-colors', { lyrics }),
-          suggestBibleVerses: (lyrics: string, theme?: string) =>
-            ipcRenderer.invoke('suggest-bible-verses', { lyrics, theme }),    suggestTheme: () => ipcRenderer.invoke('suggest-theme'),
-    suggestBackgroundMedia: (lyrics: string) => ipcRenderer.invoke('suggest-background-media', { lyrics }),
+  suggestBibleVerses: (lyrics: string, theme?: string) =>
+    ipcRenderer.invoke('suggest-bible-verses', { lyrics, theme }),
+  suggestTheme: () => ipcRenderer.invoke('suggest-theme'),
+  suggestBackgroundMedia: (lyrics: string) => ipcRenderer.invoke('suggest-background-media', { lyrics }),
   searchPexelsImages: (query: string) => ipcRenderer.invoke('search-pexels-images', { query }),
   searchPexelsVideos: (query: string) => ipcRenderer.invoke('search-pexels-videos', { query }),
   suggestFontPairing: (genre: string, mood: string) => ipcRenderer.invoke('suggest-font-pairing', { genre, mood }),
@@ -147,6 +151,23 @@ contextBridge.exposeInMainWorld('api', {
   sendVideoTimeUpdate: ({ currentTime, duration }: { currentTime: number; duration: number }) => {
     ipcRenderer.send('video-time-update', { currentTime, duration });
   },
+
+  // Sync Service
+  getUnifiedSongList: () => ipcRenderer.invoke('get-unified-song-list'),
+  performFullSync: (options?: any) => ipcRenderer.invoke('perform-full-sync', options),
+  syncSongToCloud: (artist: string, title: string) =>
+    ipcRenderer.invoke('sync-song-to-cloud', { artist, title }),
+  syncSongFromCloud: (artist: string, title: string) =>
+    ipcRenderer.invoke('sync-song-from-cloud', { artist, title }),
+
+  // Settings & Path Selection
+  getSettings: () => ipcRenderer.invoke('get-settings'),
+  updateSetting: (key: string, value: any) => ipcRenderer.invoke('update-setting', { key, value }),
+  updateSettings: (settings: any) => ipcRenderer.invoke('update-settings', settings),
+  selectDataPath: () => ipcRenderer.invoke('select-data-path'),
+  selectLyricsPath: () => ipcRenderer.invoke('select-lyrics-path'),
+  selectImagesPath: () => ipcRenderer.invoke('select-images-path'),
+  selectVideosPath: () => ipcRenderer.invoke('select-videos-path'),
 
   // Video Player Event Listeners
   onVideoPlay: (callback: () => void) => {

@@ -2,6 +2,7 @@ import fse from 'fs-extra';
 import path from 'path';
 import sanitize from 'sanitize-filename';
 import { app } from 'electron';
+import type { Song, SongInsert } from '../../lib/supabase';
 
 /**
  * Lista todas as músicas organizadas por artista
@@ -72,23 +73,23 @@ export async function getAllSongsFlat(): Promise<Array<{
 }
 
 /**
- * Lê o conteúdo de uma música e retorna lyrics + metadata
+ * Lê o conteúdo de uma música e retorna objeto Song compatível com Supabase
  */
 export async function readSong(
   artist: string,
   title: string
-): Promise<{ lyrics: string; metadata: Record<string, any> }> {
+): Promise<Partial<Song>> {
   const filePath = getSongFilePath(artist, title);
   const content = await fse.readFile(filePath, 'utf8');
   return parseSongFileContent(content);
 }
 
 /**
- * Lê apenas as lyrics (sem metadata) - compatibilidade
+ * Lê apenas as lyrics - compatibilidade
  */
 export async function readSongLyrics(artist: string, title: string): Promise<string> {
-  const { lyrics } = await readSong(artist, title);
-  return lyrics;
+  const song = await readSong(artist, title);
+  return song.lyrics || '';
 }
 
 /**
@@ -222,7 +223,8 @@ export async function songExists(artist: string, title: string): Promise<boolean
 }
 
 /**
- * Cria o conteúdo do arquivo em formato JSON
+ * Cria o conteúdo do arquivo em formato JSON seguindo a estrutura do Supabase
+ * Estrutura compatível com Database['public']['Tables']['songs']['Row']
  */
 export function createSongFileContent(
   artist: string,
@@ -234,18 +236,32 @@ export function createSongFileContent(
     genre?: string;
     language?: string;
     source?: string;
+    provider?: string;
+    search_terms?: string;
+    cache_version?: string;
     [key: string]: any;
   }
 ): string {
-  const now = new Date().toISOString().split('T')[0];
+  const now = new Date().toISOString();
 
-  const songData = {
+  // Estrutura compatível com a tabela songs do Supabase
+  const songData: Partial<Song> = {
     title,
     artist,
-    lyrics,
-    createdAt: now,
-    updatedAt: now,
-    ...metadata,
+    lyrics, // No Supabase é string, localmente também
+    is_local: true,
+    created_at: now,
+    updated_at: now,
+    // Campos opcionais do Supabase
+    album: metadata?.album || null,
+    year: metadata?.year || null,
+    genre: metadata?.genre || 'Gospel',
+    language: metadata?.language || 'pt-BR',
+    provider: metadata?.provider || metadata?.source || null,
+    search_terms: metadata?.search_terms || `${artist} ${title}`.toLowerCase(),
+    cache_version: metadata?.cache_version || '1.0',
+    metadata: metadata ? JSON.parse(JSON.stringify(metadata)) : null, // Ensure JSON serializable
+    ai_analysis: null, // Pode ser populado depois
   };
 
   return JSON.stringify(songData, null, 2);
@@ -253,14 +269,42 @@ export function createSongFileContent(
 
 /**
  * Parse do conteúdo do arquivo JSON
+ * Retorna um objeto compatível com Song do Supabase
  */
-export function parseSongFileContent(content: string): {
-  metadata: Record<string, any>;
-  lyrics: string;
-} {
+export function parseSongFileContent(content: string): Partial<Song> {
   const songData = JSON.parse(content);
-  const { lyrics, ...metadata } = songData;
-  return { metadata, lyrics };
+
+  // Se já está no novo formato compatível com Supabase
+  if (songData.title && songData.artist && songData.lyrics !== undefined) {
+    return songData as Partial<Song>;
+  }
+
+  // Formato antigo (compatibilidade): converte para novo formato
+  const {
+    lyrics,
+    title,
+    artist,
+    metadata: oldMetadata,
+    ...rest
+  } = songData;
+
+  return {
+    title: title || '',
+    artist: artist || '',
+    lyrics: lyrics || '',
+    is_local: true,
+    created_at: rest.createdAt || rest.created_at || new Date().toISOString(),
+    updated_at: rest.updatedAt || rest.updated_at || new Date().toISOString(),
+    album: rest.album || null,
+    year: rest.year || null,
+    genre: rest.genre || 'Gospel',
+    language: rest.language || 'pt-BR',
+    provider: rest.provider || rest.source || null,
+    search_terms: rest.search_terms || `${artist} ${title}`.toLowerCase(),
+    cache_version: rest.cache_version || '1.0',
+    metadata: oldMetadata || rest.metadata || null,
+    ai_analysis: rest.ai_analysis || null,
+  };
 }
 
 export function parseFrontmatterFileContent(content: string): {
