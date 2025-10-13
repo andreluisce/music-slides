@@ -16,75 +16,23 @@ export interface LyricResult {
   source: string;
 }
 
-/**
- * Search for a song on CifraClub and return the lyrics
- */
-export async function searchByTitleAndArtist({
-  artist,
-  title,
-}: {
-  artist: string;
-  title: string;
-}): Promise<LyricResult | null> {
+export async function getLyrics(url: string): Promise<LyricResult | null> {
+  console.log('   🚀 Starting getLyrics for:', url);
   const page = await createPage();
 
   try {
-    const query = `${artist} ${title}`.trim();
-    const searchUrl = `${BASE_URL}/buscar/?q=${encodeURIComponent(query)}`;
+    console.log('   🌐 Navigating directly to song page:', url);
 
-    console.log('🎸 CifraClub searching:', query);
-
-    // Navigate to search page
-    const navigated = await navigateWithRetry(page, searchUrl);
-    if (!navigated) {
-      console.log('❌ Failed to navigate to CifraClub search');
-      return null;
-    }
-
-    // Wait for search results - try multiple selectors
-    let hasResults = await waitForSelector(page, '.list--songs a', 3000);
-    if (!hasResults) {
-      hasResults = await waitForSelector(page, '.gs-title', 3000);
-    }
-    if (!hasResults) {
-      hasResults = await waitForSelector(page, 'a.song-name', 3000);
-    }
-    if (!hasResults) {
-      hasResults = await waitForSelector(page, 'a[href*="/"]', 3000);
-    }
-
-    if (!hasResults) {
-      console.log('❌ No search results found on CifraClub');
-      return null;
-    }
-
-    // Try different selectors for the first result
-    let firstResultLink =
-      (await safeAttribute(page, '.list--songs li:first-child a', 'href')) ||
-      (await safeAttribute(page, 'a.song-name', 'href')) ||
-      (await safeAttribute(page, '.gs-title a', 'href')) ||
-      (await safeAttribute(page, 'a[href*="/' + artist.toLowerCase().replace(/\s+/g, '-') + '/"]', 'href'));
-
-    if (!firstResultLink) {
-      console.log('❌ Could not find first result link');
-      return null;
-    }
-
-    const songUrl = firstResultLink.startsWith('http')
-      ? firstResultLink
-      : `${BASE_URL}${firstResultLink}`;
-
-    console.log('🔗 Opening song page:', songUrl);
-
-    // Navigate to song page
-    const songPageLoaded = await navigateWithRetry(page, songUrl);
+    const songPageLoaded = await navigateWithRetry(page, url);
     if (!songPageLoaded) {
-      console.log('❌ Failed to load song page');
+      console.log('   ❌ Failed to load song page from direct URL');
       return null;
     }
 
-    // Extract lyrics immediately - page is already loaded, no need to wait!
-    console.log('📝 Extracting lyrics (fast)...');
+    console.log('   ✅ Song page loaded successfully from direct URL');
+
+    // Extract lyrics
+    console.log('   📝 Extracting lyrics...');
 
     const lyricsSelectors = ['.cifra_lyric', '.lyric', '.letra', '[class*="letra"]', 'pre'];
     let rawLyrics = null;
@@ -93,18 +41,18 @@ export async function searchByTitleAndArtist({
       const text = await safeInnerText(page, selector);
       if (text && text.length > 10) {
         rawLyrics = text;
-        console.log(`✅ Found lyrics using selector: ${selector}`);
+        console.log(`   ✅ Found lyrics using selector: ${selector}`);
         break;
       }
     }
 
     if (!rawLyrics || rawLyrics.length < 10) {
-      console.log('❌ Lyrics text is too short or empty');
+      console.log('   ❌ Lyrics text is too short or empty');
       return null;
     }
 
-    // Extract title and artist in parallel (fast!)
-    console.log('🔍 Extracting title and artist...');
+    // Extract title and artist in parallel
+    console.log('   🔍 Extracting title and artist...');
 
     const [pageTitle, pageArtist] = await Promise.all([
       // Title selectors
@@ -128,9 +76,9 @@ export async function searchByTitleAndArtist({
     ]);
 
     // Try to extract artist from URL if page selectors failed
-    let extractedArtist = pageArtist || artist;
-    if (!extractedArtist && songUrl) {
-      const urlMatch = songUrl.match(/cifraclub\.com\.br\/([^\/]+)\//);
+    let extractedArtist = pageArtist || '';
+    if (!extractedArtist && url) {
+      const urlMatch = url.match(/cifraclub\.com\.br\/([^\/]+)\//);
       if (urlMatch) {
         extractedArtist = urlMatch[1].replace(/-/g, ' ');
         console.log('   📌 Extracted artist from URL:', extractedArtist);
@@ -139,19 +87,89 @@ export async function searchByTitleAndArtist({
 
     const cleanedLyrics = cleanLyricsText(rawLyrics);
 
-    console.log('✅ CifraClub found lyrics');
-    console.log('   📝 Title:', pageTitle || title);
-    console.log('   🎤 Artist:', extractedArtist);
+    console.log('   ✅ CifraClub found lyrics successfully!');
+    console.log(`   📝 Final title: "${pageTitle || 'Unknown Title'}"`);
+    console.log(`   🎤 Final artist: "${extractedArtist || 'Unknown Artist'}"`);
+    console.log(`   📝 Cleaned lyrics length: ${cleanedLyrics.length}`);
 
     return {
-      title: pageTitle || title,
-      artist: extractedArtist,
+      title: pageTitle || 'Unknown Title',
+      artist: extractedArtist || 'Unknown Artist',
       lyrics: cleanedLyrics,
       source: 'cifraclub',
     };
   } catch (error) {
-    console.error('❌ CifraClub scraping error:', error.message);
+    console.error('   ❌ CifraClub direct scraping error:', error.message);
     return null;
+  } finally {
+    await page.close();
+    console.log('   🛑 Finished getLyrics.');
+  }
+}
+
+export async function searchByTitleAndArtist({
+  artist,
+  title,
+}: {
+  artist: string;
+  title: string;
+}): Promise<SongSearchResult[]> {
+  const page = await createPage();
+  const results: SongSearchResult[] = [];
+
+  try {
+    const query = `${artist} ${title}`.trim();
+    const searchUrl = `${BASE_URL}/buscar/?q=${encodeURIComponent(query)}`;
+
+    console.log('🎸 CifraClub searching:', query);
+
+    const navigated = await navigateWithRetry(page, searchUrl);
+    if (!navigated) {
+      console.log('❌ Failed to navigate to CifraClub search');
+      return [];
+    }
+
+    let hasResults = await waitForSelector(page, '.list--songs li', 2000);
+    if (!hasResults) {
+      console.log('❌ List view not found, trying grid/Google search...');
+      hasResults = await waitForSelector(page, '.gs-result', 2000);
+      if (!hasResults) {
+        console.log('❌ No search results found on CifraClub');
+        return [];
+      }
+      console.log('✅ Using grid/Google search results');
+    }
+
+    const searchItems = await page.$('.list--songs li, .gs-result');
+
+    for (let i = 0; i < Math.min(searchItems.length, 10); i++) {
+      const item = searchItems[i];
+
+      const link = await item.$('a');
+      const titleEl = await item.$('.song-title, .gs-title');
+      const artistEl = await item.$('.song-artist, .gs-artist');
+
+      const url = link ? await link.getAttribute('href') : '';
+      const titleText = titleEl ? await titleEl.textContent() : '';
+      const artistText = artistEl ? await artistEl.textContent() : '';
+
+      if (!url) continue;
+
+      const cleanUrl = url.startsWith('http') ? url : `${BASE_URL}${url}`;
+
+      results.push({
+        title: titleText?.trim() || '',
+        artist: artistText?.trim() || '',
+        url: cleanUrl,
+        source: 'cifraclub',
+      });
+    }
+
+    console.log(`✅ CifraClub found ${results.length} results`);
+    return results;
+  } catch (error) {
+    console.error('❌ CifraClub search error:', error.message);
+    return [];
   } finally {
     await page.close();
   }

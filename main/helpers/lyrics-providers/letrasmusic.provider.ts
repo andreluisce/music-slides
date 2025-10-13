@@ -28,8 +28,9 @@ export async function searchByTitleAndArtist({
 }: {
   artist: string;
   title: string;
-}): Promise<LyricResult | null> {
+}): Promise<SongSearchResult[]> {
   const page = await createPage();
+  const results: SongSearchResult[] = [];
 
   try {
     const query = `${artist} ${title}`.trim();
@@ -38,74 +39,167 @@ export async function searchByTitleAndArtist({
     console.log('🎵 Letras.mus.br searching:', query);
     console.log('Search URL:', searchUrl);
 
-    // Navigate to search page
     const navigated = await navigateWithRetry(page, searchUrl);
-    console.log('Navigation to search page successful:', navigated);
     if (!navigated) {
       console.log('❌ Failed to navigate to Letras.mus.br search');
-      return null;
+      return [];
     }
 
-    // Handle modals quickly
     await handleAdBlockerModal(page);
     await handleConsentModal(page);
 
-    // Wait for search results - try multiple selectors in parallel for speed
-    console.log('🔍 Looking for search results (fast check)...');
+    console.log('🔍 Looking for search results...');
 
-    // Try all common selectors at once with short timeout
-    const resultSelectors = ['.gs-title', '.cnt-list-songs a', '.songList-table a', 'a[href*="/"]'];
-    let hasResults = false;
+    let hasResults = await waitForSelector(page, '.gs-title', 3000);
+    if (!hasResults) {
+      console.log('❌ Google Custom Search not found, trying fallback...');
+      hasResults = await waitForSelector(page, '.cnt-list-songs li', 2000);
+      if (!hasResults) {
+        return [];
+      }
+      console.log('✅ Using fallback selectors');
 
-    for (const selector of resultSelectors) {
-      const found = await waitForSelector(page, selector, 2000); // Only wait 2s max
-      if (found) {
-        console.log(`✅ Found results using selector: ${selector}`);
-        hasResults = true;
-        break;
+      const fallbackItems = await page.$$('.cnt-list-songs li');
+
+      for (let i = 0; i < Math.min(fallbackItems.length, 10); i++) {
+        const item = fallbackItems[i];
+
+        const link = await item.$('a');
+        const titleEl = await item.$('.song-name');
+        const artistEl = await item.$('.song-artist');
+
+        const url = link ? await link.getAttribute('href') : '';
+        const titleText = titleEl ? await titleEl.textContent() : '';
+        const artistText = artistEl ? await artistEl.textContent() : '';
+
+        if (!url) continue;
+
+        const cleanUrl = url?.startsWith('http') ? url : `${BASE_URL}${url}`;
+
+        const songUrlPattern = /letras\.mus\.br\/[^\/]+\/[^\/]+\/?$/;
+        const isSpecificSong = songUrlPattern.test(cleanUrl);
+
+        const excludePatterns = [
+          /mais-tocadas/i,
+          /mais-acessadas/i,
+          /top-/i,
+          /playlist/i,
+          /\/$/, // Just artist page
+        ];
+
+        const shouldExclude = excludePatterns.some(pattern => pattern.test(cleanUrl));
+
+        if (!isSpecificSong || shouldExclude) {
+          console.log(`⏭️  Skipping non-song URL: ${cleanUrl}`);
+          continue;
+        }
+
+        if (titleText || artistText || url) {
+          results.push({
+            title: titleText?.trim() || '',
+            artist: artistText?.trim() || '',
+            url: cleanUrl,
+            source: 'letrasmusic',
+          });
+        }
+      }
+    } else {
+      console.log('✅ Found Google Custom Search results');
+
+      const linkElements = await page.$$('a.gs-title');
+
+      for (let i = 0; i < Math.min(linkElements.length, 10); i++) {
+        const link = linkElements[i];
+
+        const url = await link.getAttribute('href');
+        const titleText = await link.textContent();
+
+        if (!titleText || !url) {
+          continue;
+        }
+
+        const cleanUrl = url.startsWith('http') ? url : `${BASE_URL}${url}`;
+
+        const songUrlPattern = /letras\.mus\.br\/([^\/]+)\/([^\/]+)\/?$/;
+        const urlMatch = cleanUrl.match(songUrlPattern);
+
+        if (!urlMatch) {
+          console.log(`⏭️  Skipping - invalid URL format: ${cleanUrl}`);
+          continue;
+        }
+
+        const [, artistSlug, songId] = urlMatch;
+
+        const excludePatterns = [
+          /mais-tocadas/i,
+          /mais-acessadas/i,
+          /top-/i,
+          /playlist/i,
+        ];
+
+        const shouldExclude = excludePatterns.some(pattern =>
+          pattern.test(artistSlug) || pattern.test(songId)
+        );
+
+        if (shouldExclude) {
+          console.log(`⏭️  Skipping generic page: ${cleanUrl}`);
+          continue;
+        }
+
+        if (!songId || songId.length < 2) {
+          console.log(`⏭️  Skipping - invalid song ID: ${cleanUrl}`);
+          continue;
+        }
+
+        let titleResult = '';
+        let artistResult = '';
+
+        const cleanText = titleText.replace(/\s*-\s*LETRAS\.MUS\.BR.*$/i, '').trim();
+
+        const genericPagePatterns = [
+          /página do artista/i,
+          /enviar letras/i,
+          /traduções/i,
+          /e mais/i,
+          /^[^-]+$/, 
+        ];
+
+        const isGenericPage = genericPagePatterns.some(pattern => pattern.test(cleanText));
+
+        if (isGenericPage) {
+          console.log(`⏭️  Skipping generic page: ${cleanText}`);
+          continue;
+        }
+
+        const parts = cleanText.split(' - ');
+
+        if (parts.length < 2) {
+          console.log(`⏭️  Skipping - no title/artist separator: ${cleanText}`);
+          continue;
+        }
+
+        titleResult = parts[0].trim();
+        artistResult = parts[1].trim();
+
+        if (!titleResult || !artistResult) {
+          console.log(`⏭️  Skipping - empty title or artist: ${cleanText}`);
+          continue;
+        }
+
+        results.push({
+          title: titleResult || 'Música sem título',
+          artist: artistResult || 'Artista desconhecido',
+          url: cleanUrl,
+          source: 'letrasmusic',
+        });
       }
     }
 
-    if (!hasResults) {
-      console.log('❌ No search results found on Letras.mus.br');
-      return null;
-    }
-    console.log('Search results found. Attempting to extract first result link.');
-
-    // Get the first result link - prioritize Google Custom Search results
-    // Get all potential result links and filter for specific song pages
-    const allResultLinks = await page.$$eval(
-      '.gs-title, .cnt-list-songs a, .songList-table a',
-      (links, artistSlug) => {
-        const songLinks = [];
-        const artistPagePattern = new RegExp(`letras\\.mus\\.br/${artistSlug}/?$`);
-        const songPagePattern = new RegExp(`letras\\.mus\\.br/${artistSlug}/[^/]+/?$`);
-
-        for (const link of links) {
-          const href = link.getAttribute('href');
-          if (href && songPagePattern.test(href) && !artistPagePattern.test(href)) {
-            songLinks.push(href);
-          }
-        }
-        return songLinks;
-      },
-      artist.toLowerCase().replace(/\s+/g, '-')
-    );
-
-    let firstResultLink = allResultLinks[0];
-
-    if (!firstResultLink) {
-      console.log('❌ Could not find a specific song result link');
-      return null;
-    }
-
-    // Now, scrape the lyrics from the found song URL
-    console.log('🔗 Found song URL, now scraping lyrics directly:', firstResultLink);
-    return await scrapeLyricsFromUrl(firstResultLink);
-
+    console.log(`✅ Letras.mus.br found ${results.length} specific song results`);
+    return results;
   } catch (error) {
-    console.error('❌ Letras.mus.br scraping error:', error.message);
-    return null;
+    console.error('❌ Letras.mus.br search error:', error.message);
+    return [];
   } finally {
     await page.close();
   }
@@ -114,7 +208,7 @@ export async function searchByTitleAndArtist({
 /**
  * Scrape lyrics, title, and artist directly from a given Letras.mus.br song URL
  */
-export async function scrapeLyricsFromUrl(url: string): Promise<LyricResult | null> {
+export async function getLyrics(url: string): Promise<LyricResult | null> {
   console.log('   🚀 Starting scrapeLyricsFromUrl for:', url);
   const page = await createPage();
 
