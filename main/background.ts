@@ -140,14 +140,19 @@ if (isProd) {
 
   ipcMain.handle('advanced-lyrics-search', async (_event, { userQuery }) => {
     console.log('🔍 Advanced lyrics search request:', userQuery);
-    return lyrics.advancedLyricsSearch(userQuery);
+    const { intelligentLyricsSearch } = await import('./helpers/lyrics-agent');
+    return intelligentLyricsSearch(userQuery, (message) => {
+      _event.sender.send('search-progress', message);
+    });
   });
 
   // Fast search - returns list of results without fetching full lyrics
   ipcMain.handle('fast-lyrics-search', async (_event, { userQuery }) => {
     console.log('⚡ Fast lyrics search request:', userQuery);
     const { fastLyricsSearch } = await import('./helpers/lyrics-agent');
-    return fastLyricsSearch(userQuery);
+    return fastLyricsSearch(userQuery, (message) => {
+      _event.sender.send('search-progress', message);
+    });
   });
 
   // Fetch lyrics by URL after user selects from results
