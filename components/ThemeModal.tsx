@@ -58,15 +58,15 @@ export default function ThemeModal({ isOpen, onClose, onSave, theme }: ThemeModa
   useEffect(() => {
     if (theme) {
       setName(theme.name);
-      setTitleFontFamily(theme.title_font_family);
-      setBodyFontFamily(theme.body_font_family);
-      setFontSize(theme.font_size);
-      setFontWeight(theme.font_weight);
-      setTextColor(theme.text_color);
-      setTextShadow(theme.text_shadow);
-      setTextOutline(theme.text_outline);
-      setBackgroundPosition(theme.background_position);
-      setAnimationType(theme.animation_type);
+      setTitleFontFamily(theme.title_font_family || 'Open Sans');
+      setBodyFontFamily(theme.body_font_family || 'Open Sans');
+      setFontSize(theme.font_size || 48);
+      setFontWeight(theme.font_weight || 600);
+      setTextColor(theme.text_color || '#FFFFFF');
+      setTextShadow(theme.text_shadow || '2px 2px 4px rgba(0,0,0,0.5)');
+      setTextOutline(theme.text_outline || 'none');
+      setBackgroundPosition(theme.background_position || 'center');
+      setAnimationType(theme.animation_type || 'fade');
     } else {
       setName('');
       setTitleFontFamily('Open Sans');
@@ -188,7 +188,11 @@ export default function ThemeModal({ isOpen, onClose, onSave, theme }: ThemeModa
                 size="sm"
                 className='w-full mt-2 bg-gradient-to-r from-blue-600 to-teal-600 hover:from-blue-700 hover:to-teal-700'
                 onClick={async () => {
-                  const pairing = await window.api.suggestFontPairing(selectedGenre, selectedMood);
+                  if (!window.api) {
+                    console.error("API is not available.");
+                    return;
+                  }
+                  const pairing = await window.api.ai.suggestFontPairing(selectedGenre, selectedMood);
                   if (pairing) {
                     setTitleFontFamily(pairing.titleFont);
                     setBodyFontFamily(pairing.bodyFont);

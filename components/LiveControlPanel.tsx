@@ -1,29 +1,21 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   CaretLeft,
   CaretRight,
-  Play,
-  Pause,
   Broom,
   ArrowsOut,
   Gear,
   Image as ImageIcon,
   TextT,
   Sliders,
-  Check,
   Clock,
   Circle,
 } from '@phosphor-icons/react';
 import { Button } from './ui/button';
 import { useStageMode } from '../hooks/useStageMode';
-import BackgroundDialog from './dialogs/BackgroundDialog';
-import ThemeDialog from './dialogs/ThemeDialog';
-import TransitionDialog from './dialogs/TransitionDialog';
 
-const api = typeof window !== 'undefined' ? window.api : undefined;
-
-interface Slide {
+interface LiveControlSlide {
   id: string;
   content: string;
   type?: 'verse' | 'chorus' | 'bridge';
@@ -31,29 +23,13 @@ interface Slide {
 
 export default function LiveControlPanel({ presentationId }: { presentationId: string }) {
   const { currentSong } = useStageMode();
-  const [slides, setSlides] = useState<Slide[]>([]);
+  const [slides, setSlides] = useState<LiveControlSlide[]>([]);
   const [loading, setLoading] = useState(false);
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
   const [isLive, setIsLive] = useState(false);
-const [actionFeedback, setActionFeedback] = useState<string | null>(null);
-  const [isBackgroundDialogOpen, setIsBackgroundDialogOpen] = useState(false);
-  const [isThemeDialogOpen, setIsThemeDialogOpen] = useState(false);
-  const [isTransitionDialogOpen, setIsTransitionDialogOpen] = useState(false);
+  const [actionFeedback, setActionFeedback] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [sessionDuration, setSessionDuration] = useState(0);
-  const [theme, setTheme] = useState({
-    fontSize: 80,
-    fontFamily: 'Arial, sans-serif',
-    textColor: '#ffffff',
-    textShadow: '2px 2px 8px rgba(0,0,0,0.8)',
-    backgroundColor: '#000000',
-    textAlign: 'center' as const,
-    fontWeight: 700,
-  });
-  const [transition, setTransition] = useState({
-    type: 'fade' as 'fade' | 'slide' | 'zoom',
-    speed: 33,
-  });
 
   // Load lyrics when song changes
   useEffect(() => {
@@ -66,16 +42,10 @@ const [actionFeedback, setActionFeedback] = useState<string | null>(null);
       setLoading(true);
       try {
         let lyricsText = '';
-        console.log('Loading lyrics for song:', { currentSong });
-
-        // Try to get lyrics from cache first
         if (currentSong.lyrics) {
-          console.log('Using cached lyrics');
           lyricsText = currentSong.lyrics;
         } else if (currentSong.filePath) {
-          console.log('Loading lyrics from file:', currentSong.filePath);
-          // Load from file
-          const result = await api?.readSong(currentSong.artist, currentSong.title);
+          const result = await window.api?.readSong(currentSong.artist, currentSong.title);
           if (result?.success && result.lyrics) {
             lyricsText = result.lyrics;
           }
@@ -83,24 +53,18 @@ const [actionFeedback, setActionFeedback] = useState<string | null>(null);
 
         if (lyricsText) {
           // Parse lyrics line by line
-          console.log('Raw lyrics text:', lyricsText);
           const lines = lyricsText
             .split('\n') // Split by line breaks
             .map(line => line.trim())
             .filter(line => line.length > 0);
-          console.log('Parsed lines:', lines);
 
-          const parsedSlides: Slide[] = lines.map((line, index) => {
-            // Detect chorus (simple heuristic - can be improved)
-            const isChorus = line.toLowerCase().includes('refrão') ||
-                           line.toLowerCase().includes('chorus');
-
-            return {
-              id: `slide-${index}`,
-              content: line,
-              type: isChorus ? 'chorus' : 'verse',
-            };
-          });
+          const parsedSlides: LiveControlSlide[] = lines.map((line, index) => ({
+            id: `slide-${index}`,
+            content: line,
+            type: line.toLowerCase().includes('refrão') || line.toLowerCase().includes('chorus')
+              ? 'chorus'
+              : 'verse'
+          }));
 
           setSlides(parsedSlides);
           setCurrentSlideIndex(0);
@@ -126,142 +90,42 @@ const [actionFeedback, setActionFeedback] = useState<string | null>(null);
     return () => clearInterval(interval);
   }, [isLive]);
 
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore if typing in input
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
-        return;
-      }
-
-      switch (e.key) {
-        case 'ArrowRight':
-        case ' ':
-          e.preventDefault();
-          nextSlide();
-          break;
-        case 'ArrowLeft':
-          e.preventDefault();
-          previousSlide();
-          break;
-        case 'c':
-        case 'C':
-          e.preventDefault();
-          clearScreen();
-          break;
-        case 'f':
-        case 'F':
-          e.preventDefault();
-          toggleFullscreen();
-          break;
-        case 'l':
-        case 'L':
-          e.preventDefault();
-          toggleLive();
-          break;
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentSlideIndex, slides.length]);
+  // Actions
+  const showFeedback = (message: string) => {
+    setActionFeedback(message);
+    setTimeout(() => setActionFeedback(null), 2000);
+  };
 
   const nextSlide = () => {
     if (currentSlideIndex < slides.length - 1) {
-      const newIndex = currentSlideIndex + 1;
-      console.log('DEBUG: Attempting to send next slide...', {
-        currentIndex: currentSlideIndex,
-        newIndex,
-        hasApi: !!window.api,
-        totalSlides: slides.length
-      });
-      
-      if (window.api) {
-        try {
-          window.api.sendPresentationSlideChange(newIndex);
-          console.log('DEBUG: Successfully sent slide change event');
-        } catch (error) {
-          console.error('Error sending slide change:', error);
-        }
-      } else {
-        console.warn('No window.api available!');
-      }
-      
+window.api.presentation.sendControl('slide', { index: newIndex });
       setCurrentSlideIndex(newIndex);
-      showFeedback('✓ Próximo slide enviado ao palco');
+      showFeedback('✓ Próximo slide');
     }
   };
 
   const previousSlide = () => {
     if (currentSlideIndex > 0) {
       const newIndex = currentSlideIndex - 1;
-      console.log('DEBUG: Sending previous slide to presentation, index:', newIndex);
       if (window.api) {
-        window.api.sendPresentationSlideChange(newIndex);
+        window.api.presentation.sendControl('slide', { index: newIndex });
       }
       setCurrentSlideIndex(newIndex);
-      showFeedback('✓ Slide anterior enviado ao palco');
+      showFeedback('✓ Slide anterior');
     }
   };
 
-  const goToSlide = useCallback(async (index: number) => {
-    if (index >= 0 && index < slides.length) {
-      console.log('DEBUG: Going to slide:', index);
-      if (window.api) {
-        window.api.sendPresentationSlideChange(index);
-      }
-      setCurrentSlideIndex(index);
-      showFeedback('✓ Slide enviado ao palco');
-    }
-  }, [slides.length]);
-
   const clearScreen = () => {
     if (window.api) {
-      window.api.sendPresentationSlideChange(-1); // Use -1 para indicar tela limpa
+      window.api.presentation.sendControl('clear');
       showFeedback('✓ Tela limpa');
     }
   };
 
-const toggleFullscreen = () => {
+  const toggleFullscreen = () => {
     if (window.api) {
-      window.api.sendControl('fullscreen');
+      window.api.presentation.setFullscreen();
       showFeedback('⛶ Tela cheia alternada');
-    }
-  };
-
-const handleBackgroundSelect = async (background: { type: string; path: string }) => {
-    if (!window.api) return;
-    try {
-      window.api.sendControl('background', background);
-      showFeedback('✓ Fundo atualizado');
-      setIsBackgroundDialogOpen(false);
-    } catch (error) {
-      console.error('Error selecting background:', error);
-      showFeedback('❌ Erro ao selecionar fundo');
-    }
-  };
-
-const handleThemeSelect = async (theme: any) => {
-    if (!window.api) return;
-    try {
-      window.api.sendControl('theme', theme);
-      setIsThemeDialogOpen(false);
-      showFeedback('✓ Tema atualizado');
-    } catch (error) {
-      console.error('Error updating theme:', error);
-      showFeedback('❌ Erro ao atualizar tema');
-    }
-  };
-
-const handleTransitionSelect = async (transition: { type: string; duration: number; direction?: string }) => {
-    if (!window.api) return;
-    try {
-      window.api.sendControl('transition', transition);
-      setIsTransitionDialogOpen(false);
-      showFeedback('✓ Transição atualizada');
-    } catch (error) {
-      console.error('Error updating transition:', error);
-      showFeedback('❌ Erro ao atualizar transição');
     }
   };
 
@@ -270,25 +134,11 @@ const handleTransitionSelect = async (transition: { type: string; duration: numb
     showFeedback(isLive ? '⏸ Apresentação pausada' : '▶ Ao vivo!');
   };
 
-  const showFeedback = (message: string) => {
-    setActionFeedback(message);
-    setTimeout(() => setActionFeedback(null), 2000);
-  };
-
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
-
-  // Debug logs
-  console.log('LiveControlPanel state:', {
-    currentSong,
-    slides: slides.length,
-    currentSlideIndex,
-    loading,
-    isLive
-  });
 
   const currentSlide = slides[currentSlideIndex];
   const nextSlide_preview = slides[currentSlideIndex + 1];
@@ -327,9 +177,8 @@ const handleTransitionSelect = async (transition: { type: string; duration: numb
         </div>
       </div>
 
-      {/* Main Content Area */}
+      {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Center - Preview Area */}
         <div className="flex-1 p-6 space-y-4">
           {/* Preview Cards */}
           <div className="grid grid-cols-3 gap-4 mb-6">
@@ -395,7 +244,13 @@ const handleTransitionSelect = async (transition: { type: string; duration: numb
                 {slides.map((slide, index) => (
                   <motion.button
                     key={slide.id}
-                    onClick={() => goToSlide(index)}
+                    onClick={() => {
+                      setCurrentSlideIndex(index);
+                      if (window.api) {
+                        window.api.presentation.sendControl('slide', { index });
+                      }
+                      showFeedback('✓ Slide selecionado');
+                    }}
                     className={`relative p-4 rounded-lg border transition-all ${
                       index === currentSlideIndex
                         ? 'bg-gradient-to-br from-magenta/30 to-purple-600/30 border-magenta shadow-lg shadow-magenta/40'
@@ -423,104 +278,10 @@ const handleTransitionSelect = async (transition: { type: string; duration: numb
                     >
                       {slide.content}
                     </p>
-
-                    {/* Type Badge */}
-                    {slide.type && (
-                      <span
-                        className={`absolute bottom-2 right-2 text-[10px] px-1.5 py-0.5 rounded ${
-                          slide.type === 'chorus'
-                            ? 'bg-yellow-500/20 text-yellow-300'
-                            : 'bg-blue-500/20 text-blue-300'
-                        }`}
-                      >
-                        {slide.type === 'chorus' ? 'Refrão' : slide.type}
-                      </span>
-                    )}
                   </motion.button>
                 ))}
               </div>
             )}
-          </div>
-        </div>
-
-        {/* Right Sidebar - Quick Controls */}
-        <div className="w-80 border-l border-purple-500/20 bg-black/40 backdrop-blur-md p-4 space-y-4">
-          <div>
-            <h3 className="text-xs font-semibold text-purple-400 mb-3 uppercase tracking-wider">
-              Transições
-            </h3>
-            <div className="grid grid-cols-3 gap-2">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setTransition(prev => ({ ...prev, type: 'fade' }));
-                  if (window.api) {
-                    window.api.sendPresentationThemeUpdate({ transition: { type: 'fade', speed: transition.speed } });
-                  }
-                }}
-                className={`bg-purple-900/30 border-purple-500/30 text-white hover:bg-purple-800/50 text-xs ${
-                  transition.type === 'fade' ? 'border-magenta text-magenta' : ''
-                }`}
-              >
-                Fade
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setTransition(prev => ({ ...prev, type: 'slide' }));
-                  if (window.api) {
-                    window.api.sendPresentationThemeUpdate({ transition: { type: 'slide', speed: transition.speed } });
-                  }
-                }}
-                className={`bg-purple-900/30 border-purple-500/30 text-white hover:bg-purple-800/50 text-xs ${
-                  transition.type === 'slide' ? 'border-magenta text-magenta' : ''
-                }`}
-              >
-                Slide
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setTransition(prev => ({ ...prev, type: 'zoom' }));
-                  if (window.api) {
-                    window.api.sendPresentationThemeUpdate({ transition: { type: 'zoom', speed: transition.speed } });
-                  }
-                }}
-                className={`bg-purple-900/30 border-purple-500/30 text-white hover:bg-purple-800/50 text-xs ${
-                  transition.type === 'zoom' ? 'border-magenta text-magenta' : ''
-                }`}
-              >
-                Zoom
-              </Button>
-            </div>
-          </div>
-
-          <div>
-            <h3 className="text-xs font-semibold text-purple-400 mb-3 uppercase tracking-wider">
-              Atalhos
-            </h3>
-            <div className="space-y-2 text-xs text-slate-400">
-              <div className="flex items-center justify-between">
-                <span>Próximo slide</span>
-                <kbd className="px-2 py-1 bg-slate-800 rounded text-white">→</kbd>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>Slide anterior</span>
-                <kbd className="px-2 py-1 bg-slate-800 rounded text-white">←</kbd>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>Limpar tela</span>
-                <kbd className="px-2 py-1 bg-slate-800 rounded text-white">C</kbd>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>Tela cheia</span>
-                <kbd className="px-2 py-1 bg-slate-800 rounded text-white">F</kbd>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>Ao vivo</span>
-                <kbd className="px-2 py-1 bg-slate-800 rounded text-white">L</kbd>
-              </div>
-            </div>
           </div>
         </div>
       </div>
@@ -528,6 +289,7 @@ const handleTransitionSelect = async (transition: { type: string; duration: numb
       {/* Bottom Controls */}
       <div className="flex-shrink-0 h-20 border-t border-purple-500/20 bg-black/60 backdrop-blur-md">
         <div className="h-full flex items-center justify-center gap-3 px-6">
+          {/* Navigation Controls */}
           <Button
             size="lg"
             onClick={previousSlide}
@@ -550,14 +312,10 @@ const handleTransitionSelect = async (transition: { type: string; duration: numb
 
           <div className="w-px h-10 bg-purple-500/20 mx-2" />
 
+          {/* Action Buttons */}
           <Button
             size="lg"
-            onClick={() => {
-              if (window.api) {
-                window.api.sendControl('clear');
-                showFeedback('✓ Tela limpa');
-              }
-            }}
+            onClick={clearScreen}
             variant="outline"
             className="bg-slate-800/50 border-slate-600 hover:bg-slate-700 text-white h-14 px-6"
           >
@@ -567,7 +325,15 @@ const handleTransitionSelect = async (transition: { type: string; duration: numb
 
           <Button
             size="lg"
-onClick={() => setIsBackgroundDialogOpen(true)}
+            onClick={async () => {
+              if (window.api) {
+                const result = await window.api.dialogs.openBackground();
+                if (result) {
+                  window.api.presentation.setCustomBackground(result);
+                  showFeedback('✓ Fundo atualizado');
+                }
+              }
+            }}
             variant="outline"
             className="bg-slate-800/50 border-slate-600 hover:bg-slate-700 text-white h-14 px-6"
           >
@@ -577,7 +343,15 @@ onClick={() => setIsBackgroundDialogOpen(true)}
 
           <Button
             size="lg"
-onClick={() => setIsThemeDialogOpen(true)}
+            onClick={async () => {
+              if (window.api) {
+                const result = await window.api.dialogs.openTheme();
+                if (result) {
+                  window.api.presentation.sendThemeUpdate(result);
+                  showFeedback('✓ Tema atualizado');
+                }
+              }
+            }}
             variant="outline"
             className="bg-slate-800/50 border-slate-600 hover:bg-slate-700 text-white h-14 px-6"
           >
@@ -587,7 +361,15 @@ onClick={() => setIsThemeDialogOpen(true)}
 
           <Button
             size="lg"
-onClick={() => setIsTransitionDialogOpen(true)}
+            onClick={async () => {
+              if (window.api) {
+                const result = await window.api.dialogs.openTransition();
+                if (result) {
+                  window.api.presentation.sendAction('transition', result);
+                  showFeedback('✓ Transição atualizada');
+                }
+              }
+            }}
             variant="outline"
             className="bg-slate-800/50 border-slate-600 hover:bg-slate-700 text-white h-14 px-6"
           >
@@ -599,24 +381,11 @@ onClick={() => setIsTransitionDialogOpen(true)}
 
           <Button
             size="lg"
-            onClick={() => {
-              if (window.api) {
-                window.api.sendPresentation?.('toggle-fullscreen');
-                showFeedback('✓ Tela cheia alternada');
-              }
-            }}
+            onClick={toggleFullscreen}
             variant="outline"
             className="bg-slate-800/50 border-slate-600 hover:bg-slate-700 text-white h-14 px-6"
           >
             <ArrowsOut size={20} />
-          </Button>
-
-          <Button
-            size="lg"
-            variant="outline"
-            className="bg-slate-800/50 border-slate-600 hover:bg-slate-700 text-white h-14 px-6"
-          >
-            <Gear size={20} />
           </Button>
         </div>
       </div>
@@ -631,29 +400,11 @@ onClick={() => setIsTransitionDialogOpen(true)}
             className="fixed bottom-28 left-1/2 transform -translate-x-1/2 z-50"
           >
             <div className="bg-magenta text-white px-6 py-3 rounded-full shadow-2xl shadow-magenta/50 flex items-center gap-2 font-semibold">
-              <Check size={20} weight="bold" />
               {actionFeedback}
             </div>
           </motion.div>
         )}
-</AnimatePresence>
-
-      {/* Dialogs */}
-      <BackgroundDialog
-        isOpen={isBackgroundDialogOpen}
-        onClose={() => setIsBackgroundDialogOpen(false)}
-        onSelect={handleBackgroundSelect}
-      />
-      <ThemeDialog
-        isOpen={isThemeDialogOpen}
-        onClose={() => setIsThemeDialogOpen(false)}
-        onSelect={handleThemeSelect}
-      />
-      <TransitionDialog
-        isOpen={isTransitionDialogOpen}
-        onClose={() => setIsTransitionDialogOpen(false)}
-        onSelect={handleTransitionSelect}
-      />
-      </div>
-    );
+      </AnimatePresence>
+    </div>
+  );
 }

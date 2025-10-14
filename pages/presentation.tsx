@@ -146,7 +146,7 @@ export default function PresentationPage() {
     };
 
     // Subscribe to slide change events
-    const cleanup = api.onSlideChanged?.(onSlideChange);
+    const cleanup = api.presentation.onSlideChanged?.(onSlideChange);
 
     return () => cleanup?.();
   }, [presentationId, slides]);
@@ -161,7 +161,7 @@ export default function PresentationPage() {
     // Background listener
     console.log('Setting up background listener...');
     cleanups.push(
-      api.onCustomBackground?.((newBackground: Background) => {
+      api.presentation.onCustomBackground?.((newBackground: Background) => {
         console.log('DEBUG: Background update received:', newBackground);
         console.log('Will set background to:', {
           type: newBackground.type,
@@ -174,7 +174,7 @@ export default function PresentationPage() {
     // Theme listener
     console.log('Setting up theme update listener...');
     cleanups.push(
-      api.onThemeUpdate?.((themeData: any) => {
+      api.presentation.onThemeUpdate?.((themeData: any) => {
         console.log('DEBUG: Theme update received:', themeData);
         setTheme(themeData);
       })
@@ -182,7 +182,7 @@ export default function PresentationPage() {
 
     // Control action listener
     cleanups.push(
-      api.onControlReceived?.((data: { action: string; data?: any }) => {
+      api.presentation.onControlReceived?.((data: { action: string; data?: any }) => {
         console.log('Control action received:', data.action, data.data);
         if (data.action === 'theme' && data.data) {
           setTheme(prevTheme => ({ ...prevTheme, ...data.data }));
@@ -192,7 +192,7 @@ export default function PresentationPage() {
 
     // Song info listener
     cleanups.push(
-      api.onSongInfo?.((info: { artist: string; title: string }) => {
+      api.presentation.onSongInfo?.((info: { artist: string; title: string }) => {
         console.log('DEBUG: onSongInfo received. info:', info);
         setSongInfo(info);
       })
@@ -200,7 +200,7 @@ export default function PresentationPage() {
 
     // Lyrics listener
     cleanups.push(
-      api.onLoadedLyrics?.((lyricsData: any) => {
+      api.presentation.onLoadedLyrics?.((lyricsData: any) => {
         if (typeof lyricsData === 'string') {
           // Split each line into a separate slide
           const lines = lyricsData

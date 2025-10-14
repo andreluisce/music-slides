@@ -49,7 +49,7 @@ if (isProd) {
 
 // ... (rest of your imports)
 
-let mainWindow: BrowserWindow;
+let mainWindow: BrowserWindow | null;
 
 // Main app initialization
 (async () => {
@@ -75,7 +75,7 @@ let mainWindow: BrowserWindow;
         resolveConflicts: 'keep-newest',
       });
     } catch (error) {
-      console.log('⚠️  Background sync failed (this is okay):', error.message);
+      console.log('⚠️  Background sync failed (this is okay):', (error as Error).message);
     }
   })();
 
@@ -103,7 +103,7 @@ let mainWindow: BrowserWindow;
   };
 
   // Control Interface
-  ipcMain.on('presentation-control', async (_event, { action, data }) => {
+  ipcMain.on('presentation:send-control', async (_event, { action, data }) => {
     const helpers = await getPresentationHelpers();
     const presWindow = helpers.getPresentationWindow();
 
@@ -111,7 +111,7 @@ let mainWindow: BrowserWindow;
 
     switch (action) {
       case 'clear':
-        helpers.sendToPresentationWindow('presentation-control', { action: 'clear' });
+        helpers.sendToPresentationWindow('presentation:on-control-received', { action: 'clear' });
         break;
       case 'fullscreen':
         if (presWindow) {
@@ -120,79 +120,85 @@ let mainWindow: BrowserWindow;
         break;
       case 'theme':
         console.log('Theme update through control channel:', data);
-        helpers.sendToPresentationWindow('theme-update', data);
+        helpers.sendToPresentationWindow('presentation:on-theme-update', data);
         break;
       case 'background':
-        helpers.sendToPresentationWindow('custom-background', data);
+        helpers.sendToPresentationWindow('presentation:on-custom-background', data);
         break;
       case 'transition':
-        helpers.sendToPresentationWindow('transition-update', data);
+        helpers.sendToPresentationWindow('presentation:on-transition-update', data);
         break;
     }
   });
 
   // Dialog Handlers
-  ipcMain.handle('dialog-theme', async () => {
+  ipcMain.handle('dialogs:open-theme', async () => {
     const { getPresentationWindow } = await import('./helpers/presentation-window');
     const win = getPresentationWindow();
-    await dialog.showMessageBox(win, {
-      type: 'info',
-      title: 'Tema',
-      message: 'Editor de tema será implementado em breve.',
-      buttons: ['OK']
-    });
+    if (win) {
+      await dialog.showMessageBox(win, {
+        type: 'info',
+        title: 'Tema',
+        message: 'Editor de tema será implementado em breve.',
+        buttons: ['OK']
+      });
+    }
     return null;
   });
 
-  ipcMain.handle('dialog-background', async () => {
+  ipcMain.handle('dialogs:open-background', async () => {
     const { getPresentationWindow } = await import('./helpers/presentation-window');
     const win = getPresentationWindow();
-    await dialog.showMessageBox(win, {
-      type: 'info',
-      title: 'Fundo',
-      message: 'Seletor de fundo será implementado em breve.',
-      buttons: ['OK']
-    });
+    if (win) {
+      await dialog.showMessageBox(win, {
+        type: 'info',
+        title: 'Fundo',
+        message: 'Seletor de fundo será implementado em breve.',
+        buttons: ['OK']
+      });
+    }
     return null;
   });
 
-  ipcMain.handle('dialog-transition', async () => {
+  ipcMain.handle('dialogs:open-transition', async () => {
     const { getPresentationWindow } = await import('./helpers/presentation-window');
     const win = getPresentationWindow();
-    await dialog.showMessageBox(win, {
-      type: 'info',
-      title: 'Transição',
-      message: 'Editor de transição será implementado em breve.',
-      buttons: ['OK']
-    });
+    if (win) {
+      await dialog.showMessageBox(win, {
+        type: 'info',
+        title: 'Transição',
+        message: 'Editor de transição será implementado em breve.',
+        buttons: ['OK']
+      });
+    }
     return null;
   });
 
-  ipcMain.handle('get-all-local-songs', async () => {
+  ipcMain.handle('songs:get-all-local', async () => {
     return await fileSystem.getAllSongsFlat();
   });
 
-  ipcMain.handle('get-all-presentations', async () => {
+  ipcMain.handle('presentations:get-all', async () => {
     return await presentationsService.getAllPresentations();
   });
 
-  ipcMain.handle('create-presentation', async (_event, presentation) => {
+  ipcMain.handle('presentations:create', async (_event, presentation) => {
     return await presentationsService.createPresentation(presentation);
   });
 
-  ipcMain.handle('get-presentation-items', async (_event, presentationId) => {
+  ipcMain.handle('presentations:get-items', async (_event, presentationId) => {
     return await presentationsService.getPresentationItems(presentationId);
   });
 
-  ipcMain.handle('update-presentation', async (_event, id, updates) => {
+  ipcMain.handle('presentations:update', async (_event, id, updates) => {
     return await presentationsService.updatePresentation(id, updates);
   });
 
-  ipcMain.handle('update-presentation-current-slide', async (_event, presentationId, slideId) => {
+  ipcMain.handle('presentations:update-current-slide', async (_event, presentationId, slideId) => {
     return await presentationsService.updatePresentation(presentationId, { current_slide_id: slideId });
   });
 
-  ipcMain.handle('get-default-slides', async () => {
+  ipcMain.handle('songs:get-default-slides', async () => {
     const documentsPath = app.getPath('documents');
     const defaultSlidesDir = `${documentsPath}/lyrics-slide-show/default-slides`;
 
@@ -203,7 +209,7 @@ let mainWindow: BrowserWindow;
     return files.filter(item => item.endsWith('.json'));
   });
 
-  ipcMain.handle('find-lyrics', async (_event, { searchType, artist, title }) => {
+  ipcMain.handle('songs:find-lyrics', async (_event, { searchType, artist, title }) => {
     switch (searchType) {
       case SearchType.ByAnyParameter:
         return lyrics.findByAnyParameter(`${artist} ${title}`);
@@ -214,19 +220,19 @@ let mainWindow: BrowserWindow;
     }
   });
 
-  ipcMain.handle('get-lyric-by-url-handle', async (event, { url }) => {
+  ipcMain.handle('songs:get-lyric-by-url-handle', async (event, { url }) => {
     // Implementation needed - placeholder
     console.log('get-lyric-by-url-handle called with:', url);
     return null;
   });
 
-  ipcMain.handle('get-lyric-by-file-path', async (event, { filePath, isDefault = false }) => {
+  ipcMain.handle('songs:get-lyric-by-file-path', async (event, { filePath, isDefault = false }) => {
     // Implementation needed - placeholder
     console.log('get-lyric-by-file-path called with:', filePath, isDefault);
     return null;
   });
 
-  ipcMain.handle('get-background-videos', async () => {
+  ipcMain.handle('video:get-background-videos', async () => {
     const documentsPath = app.getPath('documents');
     const videosPath = `${documentsPath}/lyrics-slide-show/videos`;
     await fse.ensureDir(videosPath);
@@ -247,11 +253,11 @@ let mainWindow: BrowserWindow;
       .map(file => `${imagesPath}/${file}`);
   });
 
-  ipcMain.handle('get-bible-verse', async (_event, { book, chapter, verse, version }) => {
+  ipcMain.handle('bible:get-verse', async (_event, { book, chapter, verse, version }) => {
     return bible.getVerse(book, chapter, verse, version);
   });
 
-  ipcMain.handle('get-video-base64', async (_event, { videoPath }) => {
+  ipcMain.handle('video:get-video-base64', async (_event, { videoPath }) => {
     try {
       const videoBuffer = await fse.readFile(videoPath);
       return `data:video/mp4;base64,${videoBuffer.toString('base64')}`;
@@ -261,7 +267,7 @@ let mainWindow: BrowserWindow;
     }
   });
 
-  ipcMain.handle('advanced-lyrics-search', async (_event, { userQuery }) => {
+  ipcMain.handle('ai:advanced-lyrics-search', async (_event, { userQuery }) => {
     const { intelligentLyricsSearch } = await import('./helpers/lyrics-agent');
     return intelligentLyricsSearch(userQuery, (message) => {
       _event.sender.send('search-progress', message);
@@ -269,7 +275,7 @@ let mainWindow: BrowserWindow;
   });
 
   // Fast search - returns list of results without fetching full lyrics
-  ipcMain.handle('fast-lyrics-search', async (_event, { userQuery }) => {
+  ipcMain.handle('ai:fast-lyrics-search', async (_event, { userQuery }) => {
     console.log('⚡ Fast lyrics search request:', userQuery);
     const { fastLyricsSearch } = await import('./helpers/lyrics-agent');
     return fastLyricsSearch(userQuery, (message) => {
@@ -278,7 +284,7 @@ let mainWindow: BrowserWindow;
   });
 
   // Fetch lyrics by URL after user selects from results
-  ipcMain.handle('fetch-lyrics-by-url', async (_event, { url, source }) => {
+  ipcMain.handle('ai:fetch-lyrics-by-url', async (_event, { url, source }) => {
     console.log('📥 Fetch lyrics by URL:', url);
     const { fetchLyricsByUrl } = await import('./helpers/lyrics-agent');
     return fetchLyricsByUrl(url, source, (message) => {
@@ -286,75 +292,75 @@ let mainWindow: BrowserWindow;
     });
   });
 
-  ipcMain.handle('suggest-theme-colors', async (_event, { lyrics: lyricsText }) => {
+  ipcMain.handle('ai:suggest-theme-colors', async (_event, { lyrics: lyricsText }) => {
     return lyrics.suggestThemeColors(lyricsText);
   });
 
-  ipcMain.handle('suggest-bible-verses', async (_event, { lyrics: lyricsText, theme }) => {
+  ipcMain.handle('ai:suggest-bible-verses', async (_event, { lyrics: lyricsText, theme }) => {
     return lyrics.suggestBibleVerses(lyricsText, theme);
   });
 
-  ipcMain.handle('suggest-theme', async () => {
+  ipcMain.handle('ai:suggest-theme', async () => {
     const { suggestTheme } = await import('./helpers/ai-service');
     return suggestTheme();
   });
 
-  ipcMain.handle('suggest-background-media', async (_event, { lyrics: lyricsParam }) => {
+  ipcMain.handle('ai:suggest-background-media', async (_event, { lyrics: lyricsParam }) => {
     const { suggestBackgroundMedia } = await import('./helpers/ai-service');
     return suggestBackgroundMedia(lyricsParam);
   });
 
-  ipcMain.handle('search-pexels-images', async (_event, { query }) => {
+  ipcMain.handle('ai:search-pexels-images', async (_event, { query }) => {
     const { searchImages } = await import('./helpers/pexels');
     return searchImages(query);
   });
 
-  ipcMain.handle('search-pexels-videos', async (_event, { query }) => {
+  ipcMain.handle('ai:search-pexels-videos', async (_event, { query }) => {
     const { searchVideos } = await import('./helpers/pexels');
     return searchVideos(query);
   });
 
-  ipcMain.handle('suggest-font-pairing', async (_event, { genre, mood }) => {
+  ipcMain.handle('ai:suggest-font-pairing', async (_event, { genre, mood }) => {
     const { suggestFontPairing } = await import('./helpers/ai-service');
     return suggestFontPairing(genre, mood);
   });
 
-  ipcMain.handle('discover-songs', async (_event, { query }) => {
+  ipcMain.handle('ai:discover-songs', async (_event, { query }) => {
     const { discoverSongs } = await import('./helpers/ai-service');
     return discoverSongs(query);
   });
 
-  ipcMain.handle('generate-chords', async (_event, { lyrics: lyricsParam }) => {
+  ipcMain.handle('ai:generate-chords', async (_event, { lyrics: lyricsParam }) => {
     const { generateChords } = await import('./helpers/ai-service');
     return generateChords(lyricsParam);
   });
 
   // Settings handlers using Supabase
-  ipcMain.handle('get-settings', async () => {
+  ipcMain.handle('settings:get-all', async () => {
     const { getSettings } = await import('./helpers/settings-service');
     return getSettings();
   });
 
-  ipcMain.handle('update-setting', async (_event, { key, value }) => {
+  ipcMain.handle('settings:update', async (_event, { key, value }) => {
     const { updateSetting } = await import('./helpers/settings-service');
     return updateSetting(key, value);
   });
 
-  ipcMain.handle('update-settings', async (_event, settings) => {
+  ipcMain.handle('settings:update-all', async (_event, settings) => {
     const { updateSettings } = await import('./helpers/settings-service');
     return updateSettings(settings);
   });
 
   // Legacy handlers (keep for backward compatibility)
-  ipcMain.handle('get-setting', async (_event, key) => {
+  ipcMain.handle('settings:get', async (_event, key) => {
     return settings.get(key);
   });
 
-  ipcMain.handle('set-setting', async (_event, { key, value }) => {
+  ipcMain.handle('settings:set', async (_event, { key, value }) => {
     return settings.set(key, value);
   });
 
-  ipcMain.handle('select-data-path', async () => {
+  ipcMain.handle('settings:select-data-path', async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
       properties: ['openDirectory', 'createDirectory'],
       title: 'Selecionar Pasta de Dados',
@@ -368,7 +374,7 @@ let mainWindow: BrowserWindow;
     return { canceled: true };
   });
 
-  ipcMain.handle('select-lyrics-path', async () => {
+  ipcMain.handle('settings:select-lyrics-path', async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
       properties: ['openDirectory', 'createDirectory'],
       title: 'Selecionar Pasta de Letras',
@@ -382,7 +388,7 @@ let mainWindow: BrowserWindow;
     return { canceled: true };
   });
 
-  ipcMain.handle('select-images-path', async () => {
+  ipcMain.handle('settings:select-images-path', async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
       properties: ['openDirectory', 'createDirectory'],
       title: 'Selecionar Pasta de Imagens',
@@ -396,7 +402,7 @@ let mainWindow: BrowserWindow;
     return { canceled: true };
   });
 
-  ipcMain.handle('select-videos-path', async () => {
+  ipcMain.handle('settings:select-videos-path', async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
       properties: ['openDirectory', 'createDirectory'],
       title: 'Selecionar Pasta de Vídeos',
@@ -411,19 +417,19 @@ let mainWindow: BrowserWindow;
   });
 
   // CRUD operations
-  ipcMain.handle('save-song', async (_event, { artist, title, lyrics: lyricsParam, metadata }) => {
+  ipcMain.handle('songs:save', async (_event, { artist, title, lyrics: lyricsParam, metadata }) => {
     try {
       const filePath = await fileSystem.saveSong(artist, title, lyricsParam, metadata);
       console.log(`✅ Song saved: ${artist} - ${title}`);
       return { success: true, filePath };
     } catch (error) {
       console.error('❌ Error saving song:', error);
-      await fileSystem.logError('Error saving song', error);
-      return { success: false, error: error.message };
+      await fileSystem.logError('Error saving song', error as Error);
+      return { success: false, error: (error as Error).message };
     }
   });
 
-  ipcMain.handle('update-song', async (_event, { artist, title, lyrics: lyricsParam, metadata }) => {
+  ipcMain.handle('songs:update', async (_event, { artist, title, lyrics: lyricsParam, metadata }) => {
     try {
       // Check if artist or title changed (metadata contains new values if they changed)
       const newArtist = metadata?.artist || artist;
@@ -468,12 +474,12 @@ let mainWindow: BrowserWindow;
       }
     } catch (error) {
       console.error('❌ Error updating song:', error);
-      await fileSystem.logError('Error updating song', error);
-      return { success: false, error: error.message };
+      await fileSystem.logError('Error updating song', error as Error);
+      return { success: false, error: (error as Error).message };
     }
   });
 
-  ipcMain.handle('delete-song', async (_event, { artist, title }) => {
+  ipcMain.handle('songs:delete', async (_event, { artist, title }) => {
     try {
       const filePath = fileSystem.getSongFilePath(artist, title);
       await fse.remove(filePath);
@@ -481,24 +487,24 @@ let mainWindow: BrowserWindow;
       return { success: true };
     } catch (error) {
       console.error('❌ Error deleting song:', error);
-      await fileSystem.logError('Error deleting song', error);
-      return { success: false, error: error.message };
+      await fileSystem.logError('Error deleting song', error as Error);
+      return { success: false, error: (error as Error).message };
     }
   });
 
-  ipcMain.handle('read-song', async (_event, { artist, title }) => {
+  ipcMain.handle('songs:read', async (_event, { artist, title }) => {
     try {
       const songData = await fileSystem.readSong(artist, title);
       return { success: true, ...songData };
     } catch (error) {
       console.error('❌ Error reading song:', error);
-      await fileSystem.logError('Error reading song', error);
-      return { success: false, error: error.message };
+      await fileSystem.logError('Error reading song', error as Error);
+      return { success: false, error: (error as Error).message };
     }
   });
 
   // Advanced Metadata Handlers
-  ipcMain.handle('get-advanced-song-analysis', async (_event, { artist, title, estimatedDuration }) => {
+  ipcMain.handle('songs:get-advanced-analysis', async (_event, { artist, title, estimatedDuration }) => {
     console.log('🧠 Get advanced song analysis request:', `${artist} - ${title}`);
     const { getAdvancedSongAnalysis } = await import('./helpers/song-analyzer');
 
@@ -514,12 +520,12 @@ let mainWindow: BrowserWindow;
       return analysis;
     } catch (error) {
       console.error('❌ Error getting advanced song analysis:', error);
-      await fileSystem.logError('Error getting advanced song analysis', error);
-      return { success: false, error: error.message };
+      await fileSystem.logError('Error getting advanced song analysis', error as Error);
+      return { success: false, error: (error as Error).message };
     }
   });
 
-  ipcMain.handle('update-song-analysis', async (_event, { artist, title, analysis }) => {
+  ipcMain.handle('songs:update-analysis', async (_event, { artist, title, analysis }) => {
     console.log('💾 Update song analysis request:', `${artist} - ${title}`);
     const { updateSongAnalysis } = await import('./helpers/song-analyzer');
 
@@ -528,12 +534,12 @@ let mainWindow: BrowserWindow;
       return { success: true };
     } catch (error) {
       console.error('❌ Error updating song analysis:', error);
-      await fileSystem.logError('Error updating song analysis', error);
+      await fileSystem.logError('Error updating song analysis', error as Error);
       throw error;
     }
   });
 
-  ipcMain.handle('generate-advanced-metadata', async (_event, { artist, title, lyrics: lyricsParam, estimatedDuration }) => {
+  ipcMain.handle('songs:generate-advanced-metadata', async (_event, { artist, title, lyrics: lyricsParam, estimatedDuration }) => {
     console.log('🤖 Generate advanced metadata request:', `${artist} - ${title}`);
     const { generateAdvancedMetadata } = await import('./helpers/advanced-lyrics-analyzer');
 
@@ -542,43 +548,43 @@ let mainWindow: BrowserWindow;
       return analysis;
     } catch (error) {
       console.error('❌ Error generating advanced metadata:', error);
-      await fileSystem.logError('Error generating advanced metadata', error);
+      await fileSystem.logError('Error generating advanced metadata', error as Error);
       throw error;
     }
   });
 
-  ipcMain.handle('get-path', (event, { name }) => {
+  ipcMain.handle('system:get-path', (event, { name }) => {
     return app.getPath(name);
   });
 
   // Sync Service Handlers
-  ipcMain.handle('get-unified-song-list', async () => {
+  ipcMain.handle('sync:get-unified-song-list', async () => {
     const { getUnifiedSongList } = await import('./helpers/sync-service');
     return getUnifiedSongList();
   });
 
-  ipcMain.handle('perform-full-sync', async (_event, options) => {
+  ipcMain.handle('sync:perform-full', async (_event, options) => {
     return performFullSync(options);
   });
 
-  ipcMain.handle('sync-song-to-cloud', async (_event, { artist, title }) => {
+  ipcMain.handle('sync:song-to-cloud', async (_event, { artist, title }) => {
     const { syncSongToCloud } = await import('./helpers/sync-service');
     return syncSongToCloud(artist, title);
   });
 
-  ipcMain.handle('sync-song-from-cloud', async (_event, { artist, title }) => {
+  ipcMain.handle('sync:song-from-cloud', async (_event, { artist, title }) => {
     const { syncSongFromCloud } = await import('./helpers/sync-service');
     return syncSongFromCloud(artist, title);
   });
 
-  ipcMain.on('send-search-progress', (_event, message: string) => {
+  ipcMain.on('ai:on-search-progress', (_event, message: string) => {
     if (mainWindow) {
-      mainWindow.webContents.send('search-progress', message);
+      mainWindow.webContents.send('ai:on-search-progress', message);
     }
   });
 
   // Handle opening presentation window
-  ipcMain.handle('open-presentation-window', async (_event, { artist, title, filePath }) => {
+  ipcMain.handle('presentation:open', async (_event, { artist, title, filePath }) => {
     console.log('🎵 Opening presentation window for:', artist, '-', title);
 
     try {
@@ -600,7 +606,7 @@ let mainWindow: BrowserWindow;
       }
 
       // Load song lyrics
-      let lyricsData;
+      let lyricsData: string | undefined;
       if (filePath) {
         const songData = await fileSystem.readSong(artist, title);
         if (songData?.lyrics) {
@@ -611,8 +617,8 @@ let mainWindow: BrowserWindow;
       // Wait a bit for the window to be ready, then send the lyrics
       presWindow.webContents.once('did-finish-load', () => {
         if (lyricsData) {
-          sendToPresentationWindow('loaded-lyrics', lyricsData);
-          sendToPresentationWindow('song-info', { artist, title });
+sendToPresentationWindow('presentation:on-loaded-lyrics', lyricsData);
+          sendToPresentationWindow('presentation:on-song-info', { artist: artist || '', title: title || '' });
         }
       });
 
@@ -626,33 +632,33 @@ let mainWindow: BrowserWindow;
       return { success: true };
     } catch (error) {
       console.error('❌ Error opening presentation window:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: (error as Error).message };
     }
   });
 
   // Handle closing presentation window
-  ipcMain.handle('close-presentation-window', async () => {
+  ipcMain.handle('presentation:close', async () => {
     const { closePresentationWindow } = await import('./helpers/presentation-window');
     closePresentationWindow();
     return { success: true };
   });
 
   // Handle sending slide change to presentation window
-  ipcMain.on('presentation-slide-change', async (_event, slideIndex: number) => {
+  ipcMain.on('presentation:send-slide-change', async (_event, slideIndex: number) => {
     console.log('DEBUG: Forwarding slide change event, index:', slideIndex);
     const helpers = await getPresentationHelpers();
-    helpers.sendToPresentationWindow('presentation-slide-change', slideIndex);
+    helpers.sendToPresentationWindow('presentation:on-slide-changed', slideIndex);
   });
 
   // Handle sending theme update to presentation window
-  ipcMain.on('presentation-theme-update', async (_event, themeData: any) => {
+  ipcMain.on('presentation:send-theme-update', async (_event, themeData: any) => {
     console.log('Theme update through theme channel:', themeData);
     const helpers = await getPresentationHelpers();
     helpers.sendToPresentationWindow('theme-update', themeData);
   });
 
   // Manipulador de tela cheia
-  ipcMain.on('set-fullscreen', async () => {
+  ipcMain.on('presentation:set-fullscreen', async () => {
     const { getPresentationWindow } = await import('./helpers/presentation-window');
     const presWindow = getPresentationWindow();
     if (presWindow) {
@@ -666,13 +672,15 @@ let mainWindow: BrowserWindow;
     const { getPresentationWindow } = await import('./helpers/presentation-window');
     const presWindow = getPresentationWindow();
     
-    // Abrir um diálogo de tema (você pode criar um diálogo personalizado aqui)
-    const result = await dialog.showMessageBox(presWindow, {
-      type: 'info',
-      title: 'Tema',
-      message: 'As configurações de tema serão adicionadas em breve.',
-      buttons: ['OK']
-    });
+    if (presWindow) {
+      // Abrir um diálogo de tema (você pode criar um diálogo personalizado aqui)
+      const result = await dialog.showMessageBox(presWindow, {
+        type: 'info',
+        title: 'Tema',
+        message: 'As configurações de tema serão adicionadas em breve.',
+        buttons: ['OK']
+      });
+    }
 
     return null; // Por enquanto retorna null, depois retornará as configurações do tema
   });
@@ -702,16 +710,16 @@ app.on('will-quit', async () => {
   console.log('✅ Application shutting down.');
 });
 
-process.on('uncaughtException', async error => {
+process.on('uncaughtException', async (error: Error) => {
   console.error('Unhandled Exception in Main Process:', error);
   await fileSystem.logError('Unhandled Exception in Main Process', error);
   app.relaunch();
   app.exit(1);
 });
 
-process.on('unhandledRejection', async (reason, promise) => {
+process.on('unhandledRejection', async (reason: Error, promise) => {
   console.error('Unhandled Rejection in Main Process:', reason, promise);
-  await fileSystem.logError(`Unhandled Rejection in Main Process: ${reason}`, new Error(reason as string));
+  await fileSystem.logError(`Unhandled Rejection in Main Process: ${reason}`, reason);
   app.relaunch();
   app.exit(1);
 });
