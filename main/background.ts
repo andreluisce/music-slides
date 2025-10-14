@@ -22,32 +22,48 @@ import { createWindow } from './helpers';
 import * as lyrics from './helpers/lyrics';
 import * as bible from './helpers/bible';
 import * as fileSystem from './helpers/file-system';
-
-import sanitize from 'sanitize-filename';
-import fse from 'fs-extra';
-import createTouchBarLyrics from './helpers/create-touchbar-items';
-import { SearchType, Slide } from './shared/types';
-import { logError, migrateOldSongsToNewStructure } from './helpers/file-system';
-import { performFullSync } from './helpers/sync-service';
 import { createApplicationMenu } from './helpers/menu';
+import { performFullSync } from './helpers/sync-service';
+import { LetrasMusProvider } from './helpers/lyrics-providers/letrasmusic.provider';
+import * as fse from 'fs-extra';
+import * as presentationsService from '../lib/presentations-service';
 
-let mainWindow: BrowserWindow;
+let letrasmusProviderInstance: LetrasMusProvider;
 
-const isProd: boolean = process.env.NODE_ENV === 'production';
+// Search types enum - inline definition
+const SearchType = {
+  ByAnyParameter: 'ByAnyParameter',
+  ByTitleAndArtist: 'ByTitleAndArtist',
+  ByTitleAndArtistExact: 'ByTitleAndArtistExact'
+} as const;
 
+// Environment check
+const isProd = process.env.NODE_ENV === 'production';
+
+// Setup serve for production
 if (isProd) {
   serve({ directory: 'dist' });
 } else {
   app.setPath('userData', `${app.getPath('userData')} (development)`);
 }
 
+// ... (rest of your imports)
+
+let mainWindow: BrowserWindow;
+
+// Main app initialization
 (async () => {
   await app.whenReady();
+
+  // Initialize LetrasMusProvider (no browser needed)
+  letrasmusProviderInstance = new LetrasMusProvider();
+  (global as any).letrasmusProvider = letrasmusProviderInstance;
+  console.log('✅ LetrasMusProvider instantiated and exposed globally.');
 
   // Create application menu
   createApplicationMenu();
 
-  await migrateOldSongsToNewStructure();
+  await fileSystem.migrateOldSongsToNewStructure();
 
   // Perform background sync on startup (non-blocking)
   console.log('🔄 Starting background sync on app startup...');
@@ -58,7 +74,6 @@ if (isProd) {
         downloadCloudOnly: true,
         resolveConflicts: 'keep-newest',
       });
-      console.log('✅ Background sync completed:', stats);
     } catch (error) {
       console.log('⚠️  Background sync failed (this is okay):', error.message);
     }
@@ -78,8 +93,103 @@ if (isProd) {
   // ===================================================================
   console.log('📡 Registering IPC handlers...');
 
+  let presentationWindowHelpers: any = null;
+  
+  const getPresentationHelpers = async () => {
+    if (!presentationWindowHelpers) {
+      presentationWindowHelpers = await import('./helpers/presentation-window');
+    }
+    return presentationWindowHelpers;
+  };
+
+  // Control Interface
+  ipcMain.on('presentation-control', async (_event, { action, data }) => {
+    const helpers = await getPresentationHelpers();
+    const presWindow = helpers.getPresentationWindow();
+
+    console.log('Control action received:', action, data);
+
+    switch (action) {
+      case 'clear':
+        helpers.sendToPresentationWindow('presentation-control', { action: 'clear' });
+        break;
+      case 'fullscreen':
+        if (presWindow) {
+          presWindow.setFullScreen(!presWindow.isFullScreen());
+        }
+        break;
+      case 'theme':
+        console.log('Theme update through control channel:', data);
+        helpers.sendToPresentationWindow('theme-update', data);
+        break;
+      case 'background':
+        helpers.sendToPresentationWindow('custom-background', data);
+        break;
+      case 'transition':
+        helpers.sendToPresentationWindow('transition-update', data);
+        break;
+    }
+  });
+
+  // Dialog Handlers
+  ipcMain.handle('dialog-theme', async () => {
+    const { getPresentationWindow } = await import('./helpers/presentation-window');
+    const win = getPresentationWindow();
+    await dialog.showMessageBox(win, {
+      type: 'info',
+      title: 'Tema',
+      message: 'Editor de tema será implementado em breve.',
+      buttons: ['OK']
+    });
+    return null;
+  });
+
+  ipcMain.handle('dialog-background', async () => {
+    const { getPresentationWindow } = await import('./helpers/presentation-window');
+    const win = getPresentationWindow();
+    await dialog.showMessageBox(win, {
+      type: 'info',
+      title: 'Fundo',
+      message: 'Seletor de fundo será implementado em breve.',
+      buttons: ['OK']
+    });
+    return null;
+  });
+
+  ipcMain.handle('dialog-transition', async () => {
+    const { getPresentationWindow } = await import('./helpers/presentation-window');
+    const win = getPresentationWindow();
+    await dialog.showMessageBox(win, {
+      type: 'info',
+      title: 'Transição',
+      message: 'Editor de transição será implementado em breve.',
+      buttons: ['OK']
+    });
+    return null;
+  });
+
   ipcMain.handle('get-all-local-songs', async () => {
     return await fileSystem.getAllSongsFlat();
+  });
+
+  ipcMain.handle('get-all-presentations', async () => {
+    return await presentationsService.getAllPresentations();
+  });
+
+  ipcMain.handle('create-presentation', async (_event, presentation) => {
+    return await presentationsService.createPresentation(presentation);
+  });
+
+  ipcMain.handle('get-presentation-items', async (_event, presentationId) => {
+    return await presentationsService.getPresentationItems(presentationId);
+  });
+
+  ipcMain.handle('update-presentation', async (_event, id, updates) => {
+    return await presentationsService.updatePresentation(id, updates);
+  });
+
+  ipcMain.handle('update-presentation-current-slide', async (_event, presentationId, slideId) => {
+    return await presentationsService.updatePresentation(presentationId, { current_slide_id: slideId });
   });
 
   ipcMain.handle('get-default-slides', async () => {
@@ -121,7 +231,20 @@ if (isProd) {
     const videosPath = `${documentsPath}/lyrics-slide-show/videos`;
     await fse.ensureDir(videosPath);
     const files = await fse.readdir(videosPath);
-    return files;
+    // Return full paths for videos
+    return files.map(file => `${videosPath}/${file}`);
+  });
+
+  ipcMain.handle('get-background-images', async () => {
+    const documentsPath = app.getPath('documents');
+    const imagesPath = `${documentsPath}/lyrics-slide-show/images`;
+    await fse.ensureDir(imagesPath);
+    const files = await fse.readdir(imagesPath);
+    // Filter for image files and return full paths
+    const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+    return files
+      .filter(file => imageExtensions.some(ext => file.toLowerCase().endsWith(ext)))
+      .map(file => `${imagesPath}/${file}`);
   });
 
   ipcMain.handle('get-bible-verse', async (_event, { book, chapter, verse, version }) => {
@@ -139,7 +262,6 @@ if (isProd) {
   });
 
   ipcMain.handle('advanced-lyrics-search', async (_event, { userQuery }) => {
-    console.log('🔍 Advanced lyrics search request:', userQuery);
     const { intelligentLyricsSearch } = await import('./helpers/lyrics-agent');
     return intelligentLyricsSearch(userQuery, (message) => {
       _event.sender.send('search-progress', message);
@@ -331,7 +453,6 @@ if (isProd) {
         });
 
         await fse.writeFile(newFilePath, fileContent, 'utf8');
-        console.log(`✅ Song moved and updated: ${artist} - ${title} → ${newArtist} - ${newTitle}`);
         return { success: true, filePath: newFilePath };
       } else {
         // Just update the existing file
@@ -456,6 +577,106 @@ if (isProd) {
     }
   });
 
+  // Handle opening presentation window
+  ipcMain.handle('open-presentation-window', async (_event, { artist, title, filePath }) => {
+    console.log('🎵 Opening presentation window for:', artist, '-', title);
+
+    try {
+      const { createPresentationWindow, getPresentationWindow, sendToPresentationWindow } =
+        await import('./helpers/presentation-window');
+
+      // Get or create presentation window
+      let presWindow = getPresentationWindow();
+
+      if (!presWindow || presWindow.isDestroyed()) {
+        presWindow = createPresentationWindow();
+
+        // Load the presentation page
+        if (isProd) {
+          await presWindow.loadURL('app://./presentation');
+        } else {
+          await presWindow.loadURL(`${process.env.VITE_DEV_SERVER_URL}/presentation`);
+        }
+      }
+
+      // Load song lyrics
+      let lyricsData;
+      if (filePath) {
+        const songData = await fileSystem.readSong(artist, title);
+        if (songData?.lyrics) {
+          lyricsData = songData.lyrics;
+        }
+      }
+
+      // Wait a bit for the window to be ready, then send the lyrics
+      presWindow.webContents.once('did-finish-load', () => {
+        if (lyricsData) {
+          sendToPresentationWindow('loaded-lyrics', lyricsData);
+          sendToPresentationWindow('song-info', { artist, title });
+        }
+      });
+
+      // If already loaded, send immediately
+      if (presWindow.webContents.isLoadingMainFrame() === false && lyricsData) {
+        sendToPresentationWindow('loaded-lyrics', lyricsData);
+        sendToPresentationWindow('song-info', { artist, title });
+      }
+
+      console.log('✅ Presentation window opened successfully');
+      return { success: true };
+    } catch (error) {
+      console.error('❌ Error opening presentation window:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Handle closing presentation window
+  ipcMain.handle('close-presentation-window', async () => {
+    const { closePresentationWindow } = await import('./helpers/presentation-window');
+    closePresentationWindow();
+    return { success: true };
+  });
+
+  // Handle sending slide change to presentation window
+  ipcMain.on('presentation-slide-change', async (_event, slideIndex: number) => {
+    console.log('DEBUG: Forwarding slide change event, index:', slideIndex);
+    const helpers = await getPresentationHelpers();
+    helpers.sendToPresentationWindow('presentation-slide-change', slideIndex);
+  });
+
+  // Handle sending theme update to presentation window
+  ipcMain.on('presentation-theme-update', async (_event, themeData: any) => {
+    console.log('Theme update through theme channel:', themeData);
+    const helpers = await getPresentationHelpers();
+    helpers.sendToPresentationWindow('theme-update', themeData);
+  });
+
+  // Manipulador de tela cheia
+  ipcMain.on('set-fullscreen', async () => {
+    const { getPresentationWindow } = await import('./helpers/presentation-window');
+    const presWindow = getPresentationWindow();
+    if (presWindow) {
+      const isFullScreen = presWindow.isFullScreen();
+      presWindow.setFullScreen(!isFullScreen);
+    }
+  });
+
+  // Manipulador do diálogo de tema
+  ipcMain.handle('open-theme-dialog', async () => {
+    const { getPresentationWindow } = await import('./helpers/presentation-window');
+    const presWindow = getPresentationWindow();
+    
+    // Abrir um diálogo de tema (você pode criar um diálogo personalizado aqui)
+    const result = await dialog.showMessageBox(presWindow, {
+      type: 'info',
+      title: 'Tema',
+      message: 'As configurações de tema serão adicionadas em breve.',
+      buttons: ['OK']
+    });
+
+    return null; // Por enquanto retorna null, depois retornará as configurações do tema
+  });
+
   console.log('✅ All IPC handlers registered');
 
   // ===================================================================
@@ -472,21 +693,25 @@ if (isProd) {
   console.log('🚀 Application loaded');
 })();
 
-
+// App event handlers
 app.on('window-all-closed', () => {
   app.quit();
 });
 
+app.on('will-quit', async () => {
+  console.log('✅ Application shutting down.');
+});
+
 process.on('uncaughtException', async error => {
   console.error('Unhandled Exception in Main Process:', error);
-  await logError('Unhandled Exception in Main Process', error);
+  await fileSystem.logError('Unhandled Exception in Main Process', error);
   app.relaunch();
   app.exit(1);
 });
 
 process.on('unhandledRejection', async (reason, promise) => {
   console.error('Unhandled Rejection in Main Process:', reason, promise);
-  await logError(`Unhandled Rejection in Main Process: ${reason}`, new Error(reason as string));
+  await fileSystem.logError(`Unhandled Rejection in Main Process: ${reason}`, new Error(reason as string));
   app.relaunch();
   app.exit(1);
 });

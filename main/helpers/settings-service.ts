@@ -7,7 +7,6 @@ let supabase: ReturnType<typeof createClient> | null = null;
 
 if (supabaseUrl && supabaseKey) {
   supabase = createClient(supabaseUrl, supabaseKey);
-  console.log('✅ Supabase client created for settings');
 }
 
 const SETTINGS_TABLE = 'app_settings';
@@ -115,10 +114,10 @@ export async function updateSetting(key: keyof AppSettings, value: any): Promise
   try {
     // Map camelCase to snake_case for database
     const dbKey = key === 'use24Hour' ? 'use24hour' :
-                  key === 'dataPath' ? 'data_path' :
-                  key === 'lyricsPath' ? 'lyrics_path' :
-                  key === 'imagesPath' ? 'images_path' :
-                  key === 'videosPath' ? 'videos_path' : key;
+      key === 'dataPath' ? 'data_path' :
+        key === 'lyricsPath' ? 'lyrics_path' :
+          key === 'imagesPath' ? 'images_path' :
+            key === 'videosPath' ? 'videos_path' : key;
 
     const { error } = await supabase
       .from(SETTINGS_TABLE)

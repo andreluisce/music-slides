@@ -7,6 +7,13 @@ export interface AppSettings {
   lyricsPath: string;
   imagesPath: string;
   videosPath: string;
+  // Presentation settings
+  showPagination: boolean;
+  showLogo: boolean;
+  logoPath?: string;
+  // Animation settings
+  transitionType: 'fade' | 'slide' | 'zoom';
+  transitionSpeed: number; // 0-100
 }
 
 interface SettingsContextType {
@@ -25,6 +32,13 @@ const defaultSettings: AppSettings = {
   lyricsPath: 'Documents/LyricsShow/songs',
   imagesPath: 'Documents/LyricsShow/images',
   videosPath: 'Documents/LyricsShow/videos',
+  // Presentation defaults
+  showPagination: false,
+  showLogo: false,
+  logoPath: undefined,
+  // Animation defaults
+  transitionType: 'fade',
+  transitionSpeed: 33,
 };
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
@@ -45,7 +59,6 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         // Use window.api for settings-specific calls
         const loadedSettings = await (window as any).api.getSettings();
         setSettings(loadedSettings);
-        console.log('✅ Settings loaded from Supabase:', loadedSettings);
       } catch (error) {
         console.error('Error loading settings:', error);
       }

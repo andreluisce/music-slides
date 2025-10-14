@@ -29,16 +29,12 @@ export interface UnifiedSong {
  * Get unified song list with sync status
  */
 export async function getUnifiedSongList(): Promise<UnifiedSong[]> {
-  console.log('🔄 Starting unified song list generation...');
-
   const songMap = new Map<string, UnifiedSong>();
 
   // Helper to create a unique key for each song
   const getSongKey = (artist: string, title: string) =>
     `${artist.toLowerCase().trim()}|||${title.toLowerCase().trim()}`;
 
-  // 1. Load local songs
-  console.log('📂 Loading local songs...');
   try {
     const localGroups = await getAllSongsGroupedByArtist();
 
@@ -68,7 +64,6 @@ export async function getUnifiedSongList(): Promise<UnifiedSong[]> {
         });
       }
     }
-    console.log(`✅ Loaded ${songMap.size} local songs`);
   } catch (error) {
     console.error('❌ Error loading local songs:', error.message);
   }
@@ -95,7 +90,6 @@ export async function getUnifiedSongList(): Promise<UnifiedSong[]> {
       return Array.from(songMap.values());
     }
 
-    console.log(`✅ Loaded ${cloudSongs?.length || 0} cloud songs`);
 
     // 3. Merge with local songs
     for (const cloudSong of cloudSongs || []) {
@@ -154,13 +148,6 @@ export async function getUnifiedSongList(): Promise<UnifiedSong[]> {
     conflicts: unifiedList.filter(s => s.syncStatus === 'conflict').length,
   };
 
-  console.log('📊 Sync Statistics:');
-  console.log('   Total songs:', stats.total);
-  console.log('   ✅ Synced:', stats.synced);
-  console.log('   📂 Local only:', stats.localOnly);
-  console.log('   ☁️  Cloud only:', stats.cloudOnly);
-  console.log('   ⚠️  Conflicts:', stats.conflicts);
-
   return unifiedList;
 }
 
@@ -182,7 +169,6 @@ export async function syncSongToCloud(artist: string, title: string): Promise<bo
 
     await uploadSongToSupabase(artist, title, fileContent);
 
-    console.log(`✅ Uploaded to cloud: ${artist} - ${title}`);
     return true;
   } catch (error) {
     console.error(`❌ Error syncing to cloud: ${artist} - ${title}`, error.message);
@@ -320,11 +306,6 @@ export async function performFullSync(options: {
     }
   }
 
-  console.log('✅ Full sync completed!');
-  console.log('   📤 Uploaded:', stats.uploaded);
-  console.log('   📥 Downloaded:', stats.downloaded);
-  console.log('   ⚠️  Conflicts resolved:', stats.conflicts);
-  console.log('   ❌ Errors:', stats.errors);
 
   return stats;
 }

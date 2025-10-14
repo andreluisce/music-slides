@@ -11,3 +11,4 @@ dist
 .env*.local
 
 dist-electron
+dist_electron_builder

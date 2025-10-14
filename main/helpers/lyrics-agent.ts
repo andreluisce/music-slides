@@ -12,6 +12,10 @@ import {
   uploadSongToSupabase,
   downloadSongFromSupabase,
   getSupabaseClient,
+  saveSongToSupabaseTable,
+  getSongFromSupabaseTable,
+  getCompleteSongData,
+  searchSongsIntelligent,
 } from './supabase-sync';
 import { createClient } from '@supabase/supabase-js';
 
@@ -27,22 +31,26 @@ export interface SongSearchResult {
   title: string;
   artist: string;
   url: string;
-  source: 'letrasmusic' | 'cifraclub' | 'database-cache';
+  source: 'letrasmusic' | 'database-cache';
 }
 
 /**
  * Intelligent lyrics search (3-level fallback):
  * 1️⃣ Supabase cache (cloud)
  * 2️⃣ Local cache (file system)
- * 3️⃣ Web providers (Letras.mus.br, CifraClub)
+ * 3️⃣ Web providers (Letras.mus.br)
  */
 export async function intelligentLyricsSearch(userQuery: string, progressCallback?: (message: string) => void): Promise<LyricsSearchResult | null> {
+  console.time('Intelligent Lyrics Search');
   logSection('INTELLIGENT LYRICS SEARCH');
   progressCallback?.('Iniciando busca inteligente de letras...');
   console.log('📝 Query:', userQuery);
 
   const { artist, title } = await resolveQuery(userQuery);
-  if (!artist && !title) return null;
+  if (!artist && !title) {
+    console.timeEnd('Intelligent Lyrics Search');
+    return null;
+  }
 
   const levels: Array<[string, () => Promise<LyricsSearchResult | null>]> = [
     ['Supabase Cache', () => searchSupabaseCache(artist, title)],
@@ -53,11 +61,16 @@ export async function intelligentLyricsSearch(userQuery: string, progressCallbac
   for (const [label, action] of levels) {
     progressCallback?.(`Verificando ${label}...`);
     logSection(label);
+    console.time(label);
     const result = await safeRun(action, `Error in ${label}`);
+    console.timeEnd(label);
     if (result) {
       console.log(`✅ Found at ${label}`);
       progressCallback?.(`Letra encontrada em ${label}.`);
+      console.time('Persist Result');
       await persistResult(result, label !== 'Supabase Cache');
+      console.timeEnd('Persist Result');
+      console.timeEnd('Intelligent Lyrics Search');
       return result;
     }
     console.log(`❌ Not found in ${label}`);
@@ -66,6 +79,7 @@ export async function intelligentLyricsSearch(userQuery: string, progressCallbac
 
   console.log('\n🚫 No lyrics found in any source.');
   progressCallback?.('Nenhuma letra encontrada em nenhuma fonte.');
+  console.timeEnd('Intelligent Lyrics Search');
   return null;
 }
 
@@ -73,13 +87,14 @@ export async function intelligentLyricsSearch(userQuery: string, progressCallbac
 // ─── LEVEL 0: QUERY INTERPRETATION ─────────────────────────────────────────────
 //
 async function resolveQuery(userQuery: string) {
-  try {
-    console.time('AI Interpretation');
-    const { artist, title, confidence } = await interpretLyricsQuery(userQuery);
-    console.timeEnd('AI Interpretation');
-    console.log(`🤖 AI Parsed → Artist: "${artist}", Title: "${title}" (${confidence}%)`);
-    return { artist, title };
-  } catch {
+  // Temporarily bypass AI interpretation as per user request
+  // try {
+  //   console.time('AI Interpretation');
+  //   const { artist, title, confidence } = await interpretLyricsQuery(userQuery);
+  //   console.timeEnd('AI Interpretation');
+  //   console.log(`🤖 AI Parsed → Artist: "${artist}", Title: "${title}" (${confidence}%)`);
+  //   return { artist, title };
+  // } catch {
     // Fallback: smart pattern detection
     const lower = userQuery.toLowerCase();
     const dash = userQuery.match(/^(.+?)\s*[-–—]\s*(.+)$/);
@@ -93,7 +108,7 @@ async function resolveQuery(userQuery: string) {
     }
     console.log(`🧩 Fallback Parse → Artist: "${artist}", Title: "${title}"`);
     return { artist, title };
-  }
+  // }
 }
 
 //
@@ -101,6 +116,32 @@ async function resolveQuery(userQuery: string) {
 //
 async function searchSupabaseCache(artist: string, title: string): Promise<LyricsSearchResult | null> {
   try {
+    // Primeiro tenta buscar exatamente por artista e título
+    const exactResult = await getSongFromSupabaseTable(artist, title);
+    if (exactResult) {
+      // Se encontrou na tabela, busca dados completos
+      const completeData = await getCompleteSongData(artist, title);
+      if (completeData) {
+        return buildResult('supabase-table', artist, title, completeData.lyrics, completeData.metadata);
+      }
+    }
+    
+    // Se não encontrou exatamente, tenta busca inteligente por texto
+    console.log('🔍 Trying intelligent text search in Supabase...');
+    const searchQuery = `${artist} ${title}`;
+    const searchResults = await searchSongsIntelligent(searchQuery, 5);
+    
+    if (searchResults && searchResults.length > 0) {
+      // Pega o primeiro resultado mais relevante e busca dados completos
+      const firstResult = searchResults[0];
+      const completeData = await getCompleteSongData(firstResult.artist, firstResult.title);
+      if (completeData) {
+        console.log(`✨ Found via text search: ${firstResult.title} by ${firstResult.artist}`);
+        return buildResult('supabase-search', firstResult.artist, firstResult.title, completeData.lyrics, completeData.metadata);
+      }
+    }
+    
+    // Fallback: busca no storage (método antigo)
     const content = await downloadSongFromSupabase(artist, title);
     if (!content) return null;
     const { lyrics, metadata } = parseSongFileContent(content);
@@ -126,21 +167,35 @@ async function searchLocalCache(artist: string, title: string): Promise<LyricsSe
 //
 async function scrapeFromWeb(artist: string, title: string): Promise<LyricsSearchResult | null> {
   const sources = [
-    { name: 'letrasmusic', fn: providers.letrasmusic.searchByTitleAndArtist },
-    { name: 'cifraclub', fn: providers.cifraclub.searchByTitleAndArtist },
+    { name: 'letrasmusic', provider: global.letrasmusProvider },
   ];
 
   for (const src of sources) {
     try {
-      console.log(`🌐 Trying ${src.name}...`);
-      const result = await src.fn({ artist, title });
-      if (result?.lyrics)
-        return buildResult(src.name, artist, title, result.lyrics, {
-          ...result.metadata,
-          fetchedAt: new Date().toISOString(),
-        });
+      console.log(`🌐 Trying ${src.name} for search...`);
+      const searchResults = await src.provider.searchByTitleAndArtist({ artist, title });
+
+      if (searchResults && searchResults.length > 0) {
+        console.log(`✅ Found ${searchResults.length} potential songs from ${src.name}. Attempting to fetch lyrics...`);
+        
+        for (const song of searchResults) {
+          try {
+            const lyricsResult = await src.provider.getLyrics(song.url);
+            if (lyricsResult && lyricsResult.lyrics) {
+              console.log(`✅ Lyrics fetched from ${src.name} for ${song.title} - ${song.artist}`);
+              return buildResult(src.name, lyricsResult.artist, lyricsResult.title, lyricsResult.lyrics, {
+                url: song.url,
+                fetchedAt: new Date().toISOString(),
+              });
+            }
+          } catch (lyricsErr: any) {
+            console.log(`❌ Failed to fetch lyrics for ${song.title} from ${src.name}:`, lyricsErr.message);
+          }
+        }
+      }
+      console.log(`❌ No lyrics found from ${src.name} for ${artist} - ${title}`);
     } catch (err: any) {
-      console.log(`❌ ${src.name} failed:`, err.message);
+      console.log(`❌ ${src.name} search failed:`, err.message);
     }
   }
   return null;
@@ -181,9 +236,24 @@ async function saveLocal(result: LyricsSearchResult) {
 
 async function saveSupabase(result: LyricsSearchResult) {
   try {
+    // Salva no storage (arquivo completo)
     const content = createSongFileContent(result.artist, result.title, result.lyrics, result.metadata);
-    await uploadSongToSupabase(result.artist, result.title, content);
-    console.log('☁️ Saved to Supabase');
+    const storagePath = await uploadSongToSupabase(result.artist, result.title, content);
+    
+    // Salva na tabela (índice + preview) com referência ao storage
+    const tableSuccess = await saveSongToSupabaseTable(
+      result.artist, 
+      result.title, 
+      result.lyrics, 
+      result.metadata,
+      storagePath || undefined
+    );
+    
+    if (tableSuccess) {
+      console.log('☁️ Saved to Supabase (🗄️ table + 🗁️ storage)');
+    } else {
+      console.log('☁️ Saved to Supabase (🗁️ storage only)');
+    }
   } catch (err: any) {
     console.error('Supabase save failed:', err.message);
   }
@@ -205,32 +275,35 @@ async function safeRun<T>(fn: () => Promise<T>, label: string): Promise<T | null
 }
 
 export async function fastLyricsSearch(userQuery: string, progressCallback?: (message: string) => void): Promise<SongSearchResult[]> {
+  console.time('Fast Lyrics Search');
   console.log('⚡ Performing fast lyrics search for:', userQuery);
   progressCallback?.('Iniciando busca rápida de letras...');
   const { artist, title } = await resolveQuery(userQuery);
   if (!artist && !title) {
     progressCallback?.('Consulta inválida para busca rápida.');
+    console.timeEnd('Fast Lyrics Search');
     return [];
   }
 
   const allResults: SongSearchResult[] = [];
   const seenSongs = new Set<string>(); // For deduplication
   const sources = [
-    { name: 'letrasmusic', fn: providers.letrasmusic.searchByTitleAndArtist },
-    { name: 'cifraclub', fn: providers.cifraclub.searchByTitleAndArtist },
+    { name: 'letrasmusic', provider: global.letrasmusProvider },
   ];
 
   for (const src of sources) {
     try {
       progressCallback?.(`Buscando em ${src.name}...`);
+      console.time(src.name);
       console.log(`🌐 Trying fast search with ${src.name}...`);
-      const results = await src.fn({ artist, title });
+      const results = await src.provider.searchByTitleAndArtist({ artist, title });
+      console.timeEnd(src.name);
       if (results && Array.isArray(results)) {
         const mappedResults = results.map(r => ({
           title: r.title,
           artist: r.artist,
           url: r.url,
-          source: src.name as 'letrasmusic' | 'cifraclub',
+          source: src.name as 'letrasmusic',
         }));
         mappedResults.forEach(r => {
           const key = `${r.title}-${r.artist}-${r.url}`;
@@ -242,12 +315,14 @@ export async function fastLyricsSearch(userQuery: string, progressCallback?: (me
         progressCallback?.(`Encontrados ${mappedResults.length} resultados em ${src.name}.`);
       }
     } catch (err: any) {
+      console.timeEnd(src.name);
       console.log(`❌ Fast search with ${src.name} failed:`, err.message);
       progressCallback?.(`Falha ao buscar em ${src.name}.`);
     }
   }
 
   progressCallback?.(`Busca rápida concluída. Total de ${allResults.length} resultados.`);
+  console.timeEnd('Fast Lyrics Search');
   return allResults;
 }
 
@@ -260,11 +335,16 @@ export async function fetchLyricsByUrl(url: string, source: string, progressCall
     switch (source) {
       case 'letrasmusic':
         progressCallback?.('Buscando letra em Letras.mus.br...');
-        result = await providers.letrasmusic.getLyrics(url);
-        break;
-      case 'cifraclub':
-        progressCallback?.('Buscando letra em CifraClub...');
-        result = await providers.cifraclub.getLyrics(url);
+        const lyricsResult = await global.letrasmusProvider.getLyrics(url);
+        if (lyricsResult) {
+          result = {
+            artist: lyricsResult.artist,
+            title: lyricsResult.title,
+            lyrics: lyricsResult.lyrics,
+            source: lyricsResult.source,
+            metadata: { url, fetchedAt: new Date().toISOString() }
+          };
+        }
         break;
       // Add other providers here as needed
       default:

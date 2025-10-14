@@ -1,13 +1,18 @@
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
 
 contextBridge.exposeInMainWorld('api', {
-  // Lyrics Window
-  openLyricsWindow: (url?: string, filePath?: string, isDefault = false) => {
-    ipcRenderer.send('open-lyrics-window', { url, filePath, isDefault });
-  },
-  closeLyricsWindow: () => {
-    ipcRenderer.send('close-lyrics-window');
-  },
+  // Presentation Window
+  openPresentationWindow: (artist: string, title: string, filePath?: string) =>
+    ipcRenderer.invoke('open-presentation-window', { artist, title, filePath }),
+  closePresentationWindow: () => ipcRenderer.invoke('close-presentation-window'),
+  sendPresentationSlideChange: (slideIndex: number) =>
+    ipcRenderer.send('presentation-slide-change', slideIndex),
+  sendPresentationThemeUpdate: (themeData: any) =>
+    ipcRenderer.send('presentation-theme-update', themeData),
+
+  setFullscreen: () => ipcRenderer.send('set-fullscreen'),
+
+  clearScreen: () => ipcRenderer.send('clear-screen'),
 
   // System paths
   getPath: (name: string) => ipcRenderer.invoke('get-path', { name }),
@@ -15,6 +20,14 @@ contextBridge.exposeInMainWorld('api', {
   // Songs
   getAllLocalSongs: () => ipcRenderer.invoke('get-all-local-songs'),
   getDefaultSlides: () => ipcRenderer.invoke('get-default-slides'),
+
+  // Presentations
+  getAllPresentations: () => ipcRenderer.invoke('get-all-presentations'),
+  createPresentation: (presentation: any) => ipcRenderer.invoke('create-presentation', presentation),
+  getPresentationItems: (presentationId: string) => ipcRenderer.invoke('get-presentation-items', presentationId),
+  updatePresentation: (id: string, updates: any) => ipcRenderer.invoke('update-presentation', id, updates),
+  updatePresentationCurrentSlide: (presentationId: string, slideId: string) =>
+    ipcRenderer.invoke('update-presentation-current-slide', presentationId, slideId),
 
   // CRUD operations
   saveSong: (artist: string, title: string, lyrics: string, metadata?: any) =>
@@ -72,6 +85,21 @@ contextBridge.exposeInMainWorld('api', {
   getSetting: (key: string) => ipcRenderer.invoke('get-setting', key),
   setSetting: (key: string, value: any) => ipcRenderer.invoke('set-setting', { key, value }),
 
+  // Presentation Controls
+  sendPresentation: (action: string, data?: any) => {
+    ipcRenderer.send('presentation-action', { action, data });
+  },
+
+  // Dialogs
+  openThemeDialog: () => ipcRenderer.invoke('dialog-theme'),
+  openBackgroundDialog: () => ipcRenderer.invoke('dialog-background'),
+  openTransitionDialog: () => ipcRenderer.invoke('dialog-transition'),
+
+  // Control interface
+  sendControl: (action: string, data?: any) => {
+    ipcRenderer.send('presentation-control', { action, data });
+  },
+
   // Window interactions
   focusTargetWindow: (windowId: number) => {
     ipcRenderer.send('focus-target-window', { windowId });
@@ -79,8 +107,8 @@ contextBridge.exposeInMainWorld('api', {
   selectVideoBackground: (windowId: number, video: string) => {
     ipcRenderer.send('select-video-background', { windowId, video });
   },
-  setCustomBackground: (windowId: number, background: any) => {
-    ipcRenderer.send('set-custom-background', { windowId, background });
+  setCustomBackground: (background: { type: string; path: string }) => {
+    ipcRenderer.send('presentation-control', { action: 'background', data: background });
   },
   setActiveSlide: (windowId: number, index: number) => {
     ipcRenderer.send('set-active-slide', { windowId, index });
@@ -94,6 +122,19 @@ contextBridge.exposeInMainWorld('api', {
     const listener = (_: IpcRendererEvent, idx: number) => callback(idx);
     ipcRenderer.on('slide-clicked', listener);
     return () => ipcRenderer.removeListener('slide-clicked', listener);
+  },
+
+  onControlReceived: (callback: (data: { action: string; data?: any }) => void) => {
+    const listener = (_: IpcRendererEvent, data: { action: string; data?: any }) => callback(data);
+    ipcRenderer.on('presentation-control', listener);
+    return () => ipcRenderer.removeListener('presentation-control', listener);
+  },
+  
+  // Add handler for slide changes
+  onSlideChanged: (callback: (idx: number) => void) => {
+    const listener = (_: IpcRendererEvent, idx: number) => callback(idx);
+    ipcRenderer.on('presentation-slide-change', listener);
+    return () => ipcRenderer.removeListener('presentation-slide-change', listener);
   },
   onSlideClickedIndex: (callback: (idx: number) => void) => {
     const listener = (_: IpcRendererEvent, idx: number) => callback(idx);
@@ -110,6 +151,11 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.on('loaded-lyrics', listener);
     return () => ipcRenderer.removeListener('loaded-lyrics', listener);
   },
+  onSongInfo: (callback: (info: { artist: string; title: string }) => void) => {
+    const listener = (_: IpcRendererEvent, info: { artist: string; title: string }) => callback(info);
+    ipcRenderer.on('song-info', listener);
+    return () => ipcRenderer.removeListener('song-info', listener);
+  },
   onCustomBackground: (callback: (background: any) => void) => {
     const listener = (_: IpcRendererEvent, background: any) => callback(background);
     ipcRenderer.on('custom-background', listener);
@@ -124,6 +170,21 @@ contextBridge.exposeInMainWorld('api', {
     const listener = (_: IpcRendererEvent, message: string) => callback(message);
     ipcRenderer.on('search-progress', listener);
     return () => ipcRenderer.removeListener('search-progress', listener);
+  },
+  onFormatLyricsProgress: (callback: (message: string) => void) => {
+    const listener = (_: IpcRendererEvent, message: string) => callback(message);
+    ipcRenderer.on('format-lyrics-progress', listener);
+    return () => ipcRenderer.removeListener('format-lyrics-progress', listener);
+  },
+  onSuggestThemeColorsProgress: (callback: (message: string) => void) => {
+    const listener = (_: IpcRendererEvent, message: string) => callback(message);
+    ipcRenderer.on('suggest-theme-colors-progress', listener);
+    return () => ipcRenderer.removeListener('suggest-theme-colors-progress', listener);
+  },
+  onSuggestBibleVersesProgress: (callback: (message: string) => void) => {
+    const listener = (_: IpcRendererEvent, message: string) => callback(message);
+    ipcRenderer.on('suggest-bible-verses-progress', listener);
+    return () => ipcRenderer.removeListener('suggest-bible-verses-progress', listener);
   },
 
   // Error reporting

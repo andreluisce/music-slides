@@ -5,7 +5,12 @@ export { };
 declare global {
   interface Window {
     api?: {
-      openLyricsWindow: (url?: string, filePath?: string, isDefault?: boolean) => Promise<void> | void;
+      // Presentation Window
+      openPresentationWindow: (artist: string, title: string, filePath?: string) => Promise<{ success: boolean; error?: string }>;
+      closePresentationWindow: () => Promise<{ success: boolean }>;
+      sendPresentationSlideChange: (slideIndex: number) => void;
+      sendPresentationThemeUpdate: (themeData: any) => void;
+      // System paths
       getPath: (name: string) => Promise<string>;
       getAllLocalSongs: () => Promise<string[]>;
       getDefaultSlides: () => Promise<string[]>;
@@ -16,7 +21,7 @@ declare global {
       onSlideClicked: (cb: (idx: number) => void) => void;
       onSlideClickedIndex: (cb: (idx: number) => void) => void;
       onSelectedVideoBackground: (cb: (videoPath: string) => void) => void;
-      onLoadedLyrics: (cb: (lyrics: Slide[]) => void) => void;
+      onLoadedLyrics: (cb: (lyrics: any) => void) => () => void;
       selectVideoBackground: (windowId: number, videoPath: string) => void;
       setActiveSlide: (windowId: number, index: number) => void;
       focusTargetWindow: (windowId: number) => void;

@@ -34,8 +34,12 @@ export default function TopBar() {
     <header className="glass-heavy flex h-20 flex-shrink-0 items-center justify-between px-8 border-b border-white/10">
       {/* Left Section: Logo + Main Navigation */}
       <div className="flex items-center gap-8">
-        {/* Logo */}
-        <div className="flex items-center gap-3">
+        {/* Logo - Clickable to return to library */}
+        <button 
+          onClick={() => setMode('library')}
+          className="flex items-center gap-3 transition-opacity hover:opacity-80"
+          title="Voltar para a Biblioteca"
+        >
           <div className="relative flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-purple-500 via-magenta to-purple-600 shadow-lg shadow-magenta/30">
             <MusicNote className="h-6 w-6 text-white" weight="bold" />
             <div className="absolute -top-1 -right-1">
@@ -48,7 +52,7 @@ export default function TopBar() {
             </h1>
             <p className="text-xs text-slate-400 font-medium">Pro</p>
           </div>
-        </div>
+        </button>
 
         {/* Main Navigation */}
         <nav className="flex items-center gap-2">

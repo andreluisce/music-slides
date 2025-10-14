@@ -1,8 +1,6 @@
-import * as vagalume from './lyrics-providers/vagalume.provider';
-import * as genius from './lyrics-providers/genius.provider';
-import * as lyricsovh from './lyrics-providers/lyricsovh.provider';
 import { interpretLyricsQuery, cleanLyrics } from './ai-service';
 import { getGeminiResponse } from './gemini';
+import * as letrasmus from './lyrics-providers';
 import { SearchType } from '../../shared/types';
 import { intelligentLyricsSearch } from './lyrics-agent';
 
@@ -71,34 +69,15 @@ export const formatLyrics = async (lyrics: string) => {
   }
 };
 
-export const findByAnyParameter = async (searchTerm: string) => {
-  console.log('🔍 Searching for:', searchTerm);
 
-  let results = await vagalume.findByAnyParameter(searchTerm);
-  console.log('📊 Vagalume results:', results?.length || 0, 'songs');
-
-  if (!results || results.length === 0) {
-    console.log('🔄 Trying Genius API as fallback...');
-    results = await genius.findByAnyParameter(searchTerm);
-    console.log('📊 Genius results:', results?.length || 0, 'songs');
-  }
-
-  return results || [];
-};
 
 export const searchByTitleAndArtistExact = async ({ artist, title }: { artist: string; title: string }) => {
-  let result = await vagalume.searchByTitleAndArtistExact({ artist, title });
-  if (!result || !result.lyrics) {
-    result = await genius.searchByTitleAndArtistExact({ artist, title });
-  }
+  let result = await letrasmus.searchByTitleAndArtistExact({ artist, title });
   return result || { artist, title, lyrics: '' };
 };
 
 export const searchByTitleAndArtist = async ({ artist, title }: { artist: string; title: string }) => {
-  let results = await vagalume.searchByTitleAndArtist({ artist, title });
-  if (!results || results.length === 0) {
-    results = await genius.searchByTitleAndArtist({ artist, title });
-  }
+  let results = await letrasmus.searchByTitleAndArtist({ artist, title });
   return results || [];
 };
 
@@ -169,10 +148,15 @@ export const suggestBibleVerses = async (lyrics: string, theme?: string) => {
  * Advanced lyrics search with 3-level fallback system
  * 1. Supabase cache (cloud)
  * 2. Local cache (file system)
- * 3. Web scraping (Playwright - Letras.mus.br, CifraClub)
+ * 3. Web scraping (Playwright - Letras.mus.br)
  *
  * Automatically saves results to both Supabase and local storage
  */
+export const findByAnyParameter = async (query: string) => {
+  const results = await letrasmus.findByAnyParameter(query);
+  return results || [];
+};
+
 export const advancedLyricsSearch = async (userQuery: string) => {
   try {
     console.log('🚀 Starting advanced lyrics search for:', userQuery);

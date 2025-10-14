@@ -6,7 +6,7 @@ import StagePanel from './StagePanel';
 import LiveControlPanel from './LiveControlPanel';
 
 export default function PresentationsPanel() {
-  const { mode, setMode } = useStageMode();
+  const { mode, setMode, selectedPresentation } = useStageMode();
 
   // Determine active mode
   const activeMode = ['editor', 'stage', 'live'].includes(mode) ? mode : 'editor';
@@ -75,7 +75,22 @@ export default function PresentationsPanel() {
 
       {/* Active Mode Content */}
       <div className="flex-1 overflow-auto">
-        <ActiveComponent />
+        {activeMode === 'live' ? (
+          // Se estiver no modo ao vivo, use o LiveControlPanel
+          <LiveControlPanel 
+            presentationId={selectedPresentation?.id || ''}
+            key={activeMode}
+          />
+        ) : selectedPresentation ? (
+          <ActiveComponent 
+            presentationId={selectedPresentation.id} 
+            key={activeMode}
+          />
+        ) : (
+          <div className="flex items-center justify-center h-full text-slate-400">
+            Selecione ou crie uma apresentação para começar.
+          </div>
+        )}
       </div>
     </div>
   );

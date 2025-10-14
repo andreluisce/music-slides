@@ -1,6 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useStageMode } from '../hooks/useStageMode';
-import { MusicNote, Video, Image, BookOpen, Palette } from '@phosphor-icons/react';
+import { Command } from 'cmdk';
+import SidebarLibrary from './library/SidebarLibrary';
+import CommandPalette from './library/CommandPalette';
+import SongGridPreview from './library/SongGridPreview';
+import Inspector from './library/Inspector';
+import PlanPanel from './library/PlanPanel';
 import MusicLibrary from './MusicLibrary';
 import VideoPanel from './VideoPanel';
 import BiblePanel from './BiblePanel';
@@ -8,79 +13,116 @@ import ThemesPanel from './ThemesPanel';
 
 export default function LibraryPanel() {
   const { mode, setMode } = useStageMode();
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const [selectedSection, setSelectedSection] = useState('all');
+  const [selectedSong, setSelectedSong] = useState<any>(null);
+  const [activePlan, setActivePlan] = useState<any>(null);
+  const [stats, setStats] = useState({
+    total: 0,
+    favorites: 0,
+    recent: 0,
+    cloud: 0,
+    local: 0,
+  });
 
-  // Determine active sub-section
-  const activeSection = ['songs', 'videos', 'images', 'bible', 'themes'].includes(mode)
-    ? mode
-    : 'songs'; // default to songs
+  // Load stats on mount
+  useEffect(() => {
+    const loadStats = async () => {
+      try {
+        const songs = await window.api?.getUnifiedSongList();
+        if (songs && Array.isArray(songs)) {
+          setStats({
+            total: songs.length,
+            favorites: songs.filter(s => s.metadata?.favorite).length,
+            recent: songs.filter(s => {
+              const updatedAt = new Date(s.metadata?.updatedAt || 0);
+              const oneWeekAgo = new Date();
+              oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+              return updatedAt > oneWeekAgo;
+            }).length,
+            cloud: songs.filter(s => s.syncStatus === 'cloud-only').length,
+            local: songs.filter(s => s.syncStatus === 'local-only').length,
+          });
+        }
+      } catch (error) {
+        console.error('Error loading stats:', error);
+      }
+    };
 
+    loadStats();
+  }, []);
+
+  // Handle keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        setIsCommandPaletteOpen(true);
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // Determine active component based on mode
   const sections = [
-    { id: 'songs', label: 'Músicas', icon: MusicNote, component: MusicLibrary },
-    { id: 'videos', label: 'Vídeos', icon: Video, component: VideoPanel },
-    { id: 'images', label: 'Imagens', icon: Image, component: () => <EmptySection title="Imagens" /> },
-    { id: 'bible', label: 'Bíblia', icon: BookOpen, component: BiblePanel },
-    { id: 'themes', label: 'Temas', icon: Palette, component: ThemesPanel },
+    { id: 'songs', component: MusicLibrary },
+    { id: 'videos', component: VideoPanel },
+    { id: 'bible', component: BiblePanel },
+    { id: 'themes', component: ThemesPanel },
   ];
 
-  const ActiveComponent = sections.find((s) => s.id === activeSection)?.component || MusicLibrary;
+  const ActiveComponent =
+    sections.find((s) => s.id === mode)?.component || MusicLibrary;
+
+  // Handlers
+  const handleSongSelect = (song: any) => {
+    setSelectedSong(song);
+  };
+
+  const handleOpenLyrics = async (song: any) => {
+    try {
+      if (song.filePath) {
+        await window.api?.openLyricsWindow(undefined, song.filePath);
+      } else if (song.url) {
+        await window.api?.openLyricsWindow(song.url);
+      }
+    } catch (error) {
+      console.error('Error opening lyrics:', error);
+    }
+  };
 
   return (
-    <div className="flex h-full overflow-hidden">
-      {/* Sidebar */}
-      <aside className="w-64 flex-shrink-0 border-r border-white/10 bg-black/20 backdrop-blur-sm">
-        <div className="p-4">
-          <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3 px-3">
-            Conteúdo
-          </h2>
-          <nav className="space-y-1">
-            {sections.map((section) => {
-              const Icon = section.icon;
-              const isActive = activeSection === section.id;
-
-              return (
-                <button
-                  key={section.id}
-                  onClick={() => setMode(section.id as any)}
-                  className={`
-                    w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium
-                    transition-all duration-200
-                    ${
-                      isActive
-                        ? 'bg-gradient-to-r from-magenta/20 to-purple-500/20 text-white shadow-lg'
-                        : 'text-slate-400 hover:text-white hover:bg-white/5'
-                    }
-                  `}
-                >
-                  <Icon size={20} weight={isActive ? 'fill' : 'regular'} />
-                  {section.label}
-                  {isActive && (
-                    <div className="ml-auto h-2 w-2 rounded-full bg-magenta" />
-                  )}
-                </button>
-              );
-            })}
-          </nav>
-        </div>
-      </aside>
+    <div className="flex h-full">
+      {/* Left Sidebar: Library & Playlists */}
+      <SidebarLibrary
+        selectedSection={selectedSection}
+        onSelectSection={setSelectedSection}
+        playlists={[]}
+        onSelectPlaylist={() => { }}
+        onCreatePlaylist={() => { }}
+        onSync={() => { }}
+        stats={stats}
+      />
 
       {/* Main Content */}
-      <main className="flex-1 overflow-auto">
-        <ActiveComponent />
-      </main>
-    </div>
-  );
-}
-
-function EmptySection({ title }: { title: string }) {
-  return (
-    <div className="flex h-full items-center justify-center p-6">
-      <div className="text-center">
-        <div className="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full bg-white/5">
-          <Image size={32} className="text-slate-400" />
-        </div>
-        <h2 className="text-xl font-bold text-white mb-2">{title}</h2>
-        <p className="text-slate-400">Esta seção será implementada em breve.</p>
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <main className="flex-1 overflow-auto">
+          <ActiveComponent
+            onSongSelect={handleSongSelect}
+            selectedSection={selectedSection}
+          />
+        </main>
       </div>
+
+      {/* Command Palette Modal */}
+      <CommandPalette
+        isOpen={isCommandPaletteOpen}
+        onClose={() => setIsCommandPaletteOpen(false)}
+        onSelectSong={handleSongSelect}
+        onImportSong={() => { }}
+      />
     </div>
   );
 }

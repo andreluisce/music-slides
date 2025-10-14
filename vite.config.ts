@@ -11,6 +11,7 @@ const externalDependencies = Object.keys(pkg.dependencies || {}).concat([
   'electron-store',
   'fs-extra',
   'dotenv',
+  'playwright',
 ])
 
 export default defineConfig({
@@ -21,6 +22,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: path.resolve(__dirname, 'index.html'),
+        presentation: path.resolve(__dirname, 'presentation.html'),
       },
     },
   },

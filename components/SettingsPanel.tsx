@@ -6,30 +6,22 @@ import { Switch } from './ui/switch';
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Slider } from './ui/slider';
-import { useSettings } from '../contexts/SettingsContext';
+import { useSettings, type AppSettings } from '../contexts/SettingsContext';
 import { FloppyDisk } from '@phosphor-icons/react';
 
 export default function SettingsPanel() {
   const { settings, updateSetting, selectDataPath, selectLyricsPath, selectImagesPath, selectVideosPath } = useSettings();
 
   // Local state for unsaved changes
-  const [showPagination, setShowPagination] = useState(false);
-  const [showLogo, setShowLogo] = useState(false);
-  const [transitionType, setTransitionType] = useState('fade');
-  const [transitionSpeed, setTransitionSpeed] = useState([33]);
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  const handleSave = async () => {
+  const handlePresentationSettingChange = async (key: keyof AppSettings, value: any) => {
     setIsSaving(true);
     try {
-      // Here you would save the additional settings
-      // For now, we'll just simulate a save
-      await new Promise(resolve => setTimeout(resolve, 500));
-      setHasUnsavedChanges(false);
-      console.log('✅ Settings saved successfully');
+      await updateSetting(key, value);
+      console.log(`✅ Setting '${key}' saved successfully`);
     } catch (error) {
-      console.error('❌ Error saving settings:', error);
+      console.error(`❌ Error saving setting '${key}':`, error);
     } finally {
       setIsSaving(false);
     }
@@ -39,15 +31,11 @@ export default function SettingsPanel() {
     <div className="p-6 pb-24">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-white">Configurações</h1>
-        {hasUnsavedChanges && (
-          <Button
-            onClick={handleSave}
-            disabled={isSaving}
-            className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
-          >
-            <FloppyDisk size={16} weight='bold' className="mr-2" />
-            {isSaving ? 'Salvando...' : 'Salvar Alterações'}
-          </Button>
+        {isSaving && (
+          <div className="flex items-center gap-2 text-sm text-purple-400">
+            <div className="h-4 w-4 animate-spin rounded-full border-2 border-purple-400 border-t-transparent" />
+            <span>Salvando...</span>
+          </div>
         )}
       </div>
       <div className="space-y-8">
@@ -151,27 +139,33 @@ export default function SettingsPanel() {
               <Label htmlFor="show-pagination" className="text-white">Mostrar Paginação</Label>
               <Switch
                 id="show-pagination"
-                checked={showPagination}
-                onCheckedChange={(checked) => {
-                  setShowPagination(checked);
-                  setHasUnsavedChanges(true);
-                }}
+                checked={settings.showPagination}
+                onCheckedChange={(checked) => handlePresentationSettingChange('showPagination', checked)}
               />
             </div>
             <div className="flex items-center justify-between">
               <Label htmlFor="show-logo" className="text-white">Mostrar Logo</Label>
               <Switch
                 id="show-logo"
-                checked={showLogo}
-                onCheckedChange={(checked) => {
-                  setShowLogo(checked);
-                  setHasUnsavedChanges(true);
-                }}
+                checked={settings.showLogo}
+                onCheckedChange={(checked) => handlePresentationSettingChange('showLogo', checked)}
               />
             </div>
             <div className="flex items-center justify-between">
               <Label htmlFor="logo-upload" className="text-white">Upload Logo</Label>
-              <Input id="logo-upload" type="file" className="bg-white/10 border-white/20 text-white" />
+              <Input
+                id="logo-upload"
+                type="file"
+                accept="image/*"
+                className="bg-white/10 border-white/20 text-white"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    // TODO: Handle logo upload
+                    console.log('Logo file selected:', file.name);
+                  }
+                }}
+              />
             </div>
           </div>
         </div>
@@ -181,11 +175,10 @@ export default function SettingsPanel() {
             <div className="flex items-center justify-between">
               <Label htmlFor="transition-type" className="text-white">Tipo de Transição (Slide)</Label>
               <Select
-                value={transitionType}
-                onValueChange={(value) => {
-                  setTransitionType(value);
-                  setHasUnsavedChanges(true);
-                }}
+                value={settings.transitionType}
+                onValueChange={(value: 'fade' | 'slide' | 'zoom') =>
+                  handlePresentationSettingChange('transitionType', value)
+                }
               >
                 <SelectTrigger className="w-[180px] bg-white/10 border-white/20 text-white">
                   <SelectValue placeholder="Fade" />
@@ -201,11 +194,10 @@ export default function SettingsPanel() {
               <Label htmlFor="transition-speed" className="text-white">Velocidade da Transição</Label>
               <Slider
                 id="transition-speed"
-                value={transitionSpeed}
-                onValueChange={(value) => {
-                  setTransitionSpeed(value);
-                  setHasUnsavedChanges(true);
-                }}
+                value={[settings.transitionSpeed]}
+                onValueChange={([value]) =>
+                  handlePresentationSettingChange('transitionSpeed', value)
+                }
                 max={100}
                 step={1}
                 className="w-[180px]"
@@ -222,25 +214,11 @@ export default function SettingsPanel() {
         </div>
       </div>
 
-      {/* Fixed footer with save button */}
+      {/* Fixed footer */}
       <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-t from-slate-900 via-slate-900/95 to-transparent backdrop-blur-sm border-t border-white/10 p-4">
         <div className="flex items-center justify-between max-w-7xl mx-auto">
           <p className="text-xs text-slate-400">v2.0.0 Lyrics Show</p>
-          {hasUnsavedChanges ? (
-            <div className="flex items-center gap-3">
-              <span className="text-sm text-yellow-400">Você tem alterações não salvas</span>
-              <Button
-                onClick={handleSave}
-                disabled={isSaving}
-                className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
-              >
-                <FloppyDisk size={16} weight='bold' className="mr-2" />
-                {isSaving ? 'Salvando...' : 'Salvar Alterações'}
-              </Button>
-            </div>
-          ) : (
-            <span className="text-sm text-green-400">Todas as alterações foram salvas</span>
-          )}
+          <span className="text-sm text-green-400">Configurações salvas automaticamente</span>
         </div>
       </div>
     </div>

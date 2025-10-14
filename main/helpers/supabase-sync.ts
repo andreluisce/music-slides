@@ -9,6 +9,7 @@ import {
 } from './file-system';
 
 const BUCKET_NAME = 'songs';
+const TABLE_NAME = 'songs'; // Nome da tabela
 
 // Lazy-loaded Supabase client
 let supabaseClient: SupabaseClient | null = null;
@@ -44,7 +45,6 @@ async function ensureBucket() {
       public: false,
       fileSizeLimit: 1024 * 1024, // 1MB
     });
-    console.log(`✅ Bucket '${BUCKET_NAME}' created`);
   }
 }
 
@@ -108,7 +108,7 @@ export async function downloadSongFromSupabase(
 
     const fileContent = await data.text();
     console.log(`☁️ Downloaded from Supabase: ${filePath} (with metadata)`);
-    
+
     // Validate that it's valid JSON
     try {
       JSON.parse(fileContent);
@@ -116,7 +116,7 @@ export async function downloadSongFromSupabase(
       console.error(`❌ Invalid JSON downloaded from ${filePath}:`, parseError);
       return null;
     }
-    
+
     return fileContent;
   } catch (error) {
     console.error('❌ Supabase download failed:', error);
@@ -167,6 +167,313 @@ export async function listSupabaseSongs(): Promise<
     return songs;
   } catch (error) {
     console.error('❌ Failed to list Supabase songs:', error);
+    return [];
+  }
+}
+
+/**
+ * Salva uma música na tabela do Supabase Database
+ * @param artist - Nome do artista
+ * @param title - Título da música
+ * @param lyrics - Letra da música
+ * @param metadata - Metadados adicionais
+ */
+export async function saveSongToSupabaseTable(
+  artist: string,
+  title: string,
+  lyrics: string,
+  metadata: Record<string, any> = {},
+  storagePath?: string
+): Promise<boolean> {
+  try {
+    const supabase = getSupabaseClient();
+
+    // Cria preview das letras (primeiras 200 caracteres)
+    const lyricsPreview = lyrics.length > 200
+      ? lyrics.substring(0, 200) + '...'
+      : lyrics;
+
+    // Monta caminho do storage se não fornecido
+    const defaultStoragePath = storagePath ||
+      `${normalizeNameForFileSystem(artist)}/${normalizeNameForFileSystem(title)}.json`;
+
+    const songData = {
+      artist,
+      title,
+      source: metadata.source || 'unknown',
+      url: metadata.url || null,
+      lyrics_preview: lyricsPreview,
+      lyrics_length: lyrics.length,
+      storage_path: defaultStoragePath,
+      metadata,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { error } = await supabase
+      .from(TABLE_NAME)
+      .upsert(songData, {
+        onConflict: 'artist,title', // Evita duplicatas baseado em artista + título
+        ignoreDuplicates: false, // Atualiza se já existir
+      });
+
+    if (error) {
+      console.error('❌ Error saving to Supabase table:', error);
+      return false;
+    }
+
+    console.log(`🗄️ Saved to Supabase table: ${artist} - ${title} (${lyrics.length} chars)`);
+    return true;
+  } catch (error) {
+    console.error('❌ Failed to save to Supabase table:', error);
+    return false;
+  }
+}
+
+/**
+ * Busca uma música na tabela do Supabase Database
+ * @param artist - Nome do artista
+ * @param title - Título da música
+ */
+export async function getSongFromSupabaseTable(
+  artist: string,
+  title: string
+): Promise<any | null> {
+  try {
+    const supabase = getSupabaseClient();
+
+    const { data, error } = await supabase
+      .from(TABLE_NAME)
+      .select('*')
+      .eq('artist', artist)
+      .eq('title', title)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        // Not found, não é um erro
+        return null;
+      }
+      console.error('❌ Error fetching from Supabase table:', error);
+      return null;
+    }
+
+    console.log(`🗄️ Found in Supabase table: ${artist} - ${title}`);
+    return data;
+  } catch (error) {
+    console.error('❌ Failed to fetch from Supabase table:', error);
+    return null;
+  }
+}
+
+/**
+ * Lista todas as músicas na tabela do Supabase Database
+ */
+export async function listSongsFromSupabaseTable(): Promise<any[]> {
+  try {
+    const supabase = getSupabaseClient();
+
+    const { data, error } = await supabase
+      .from(TABLE_NAME)
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('❌ Error listing from Supabase table:', error);
+      return [];
+    }
+
+    console.log(`🗄️ Listed ${data?.length || 0} songs from Supabase table`);
+    return data || [];
+  } catch (error) {
+    console.error('❌ Failed to list from Supabase table:', error);
+    return [];
+  }
+}
+
+/**
+ * Busca inteligente: Tabela primeiro (rápido) depois Storage (completo)
+ * @param artist - Nome do artista
+ * @param title - Título da música
+ * @returns Dados completos da música
+ */
+export async function getCompleteSongData(
+  artist: string,
+  title: string
+): Promise<{ lyrics: string; metadata: any; source: string } | null> {
+  try {
+    // 1º: Busca na tabela para verificar se existe e pegar storage_path
+    const tableData = await getSongFromSupabaseTable(artist, title);
+
+    if (tableData && tableData.storage_path) {
+      // 2º: Busca o arquivo completo no storage
+      const supabase = getSupabaseClient();
+      const { data, error } = await supabase.storage.from(BUCKET_NAME).download(tableData.storage_path);
+
+      if (!error && data) {
+        const content = await data.text();
+        const parsed = JSON.parse(content);
+
+        console.log(`📋 Complete song data retrieved for: ${artist} - ${title}`);
+        return {
+          lyrics: parsed.lyrics,
+          metadata: parsed.metadata || {},
+          source: tableData.source,
+        };
+      }
+    }
+
+    // 3º: Fallback para busca direta no storage (caso não tenha na tabela)
+    const content = await downloadSongFromSupabase(artist, title);
+    if (content) {
+      const parsed = JSON.parse(content);
+      console.log(`📋 Song data retrieved from storage fallback: ${artist} - ${title}`);
+      return {
+        lyrics: parsed.lyrics,
+        metadata: parsed.metadata || {},
+        source: parsed.metadata?.source || 'unknown',
+      };
+    }
+
+    return null;
+  } catch (error) {
+    console.error('❌ Failed to get complete song data:', error);
+    return null;
+  }
+}
+
+/**
+ * Lista músicas com preview rápido (apenas tabela)
+ * @param limit - Número máximo de resultados
+ */
+export async function listSongsPreview(limit = 50): Promise<any[]> {
+  try {
+    const supabase = getSupabaseClient();
+
+    const { data, error } = await supabase
+      .from(TABLE_NAME)
+      .select('artist, title, source, lyrics_preview, lyrics_length, created_at')
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      console.error('❌ Error listing songs preview:', error);
+      return [];
+    }
+
+    console.log(`🎵 Listed ${data?.length || 0} songs (preview mode)`);
+    return data || [];
+  } catch (error) {
+    console.error('❌ Failed to list songs preview:', error);
+    return [];
+  }
+}
+
+/**
+ * Busca por texto completo usando PostgreSQL Full-Text Search
+ * @param query - Termo de busca
+ * @param limit - Número máximo de resultados
+ * @returns Lista de músicas ordenada por relevância
+ */
+export async function searchSongsByText(
+  query: string,
+  limit = 20
+): Promise<any[]> {
+  try {
+    const supabase = getSupabaseClient();
+
+    // Normaliza o termo de busca
+    const normalizedQuery = query.toLowerCase().trim();
+
+    if (!normalizedQuery) {
+      return [];
+    }
+
+    console.log(`🔍 Full-text search for: "${normalizedQuery}"`);
+
+    // Usa o padrão simples do Supabase JS
+    const { data, error } = await supabase
+      .from(TABLE_NAME)
+      .select('title, artist, source, lyrics_preview, lyrics_length, metadata, storage_path, created_at')
+      .textSearch('search_vector', normalizedQuery, {
+        type: 'plain', // ou 'websearch' para aceitar operadores tipo Google
+        config: 'simple',
+      })
+      .limit(limit);
+
+    if (error) {
+      console.error('❌ Full-text search failed:', error);
+      return [];
+    }
+
+    console.log(`🎵 Found ${data?.length || 0} songs via full-text search`);
+    return data || [];
+  } catch (error) {
+    console.error('❌ Failed to search songs by text:', error);
+    return [];
+  }
+}
+
+/**
+ * Busca simples por artista ou título (ILIKE)
+ * @param query - Termo de busca
+ * @param limit - Número máximo de resultados
+ */
+export async function searchSongsSimple(
+  query: string,
+  limit = 20
+): Promise<any[]> {
+  try {
+    const supabase = getSupabaseClient();
+    const searchTerm = `%${query.trim()}%`;
+
+    console.log(`🔍 Simple search for: "${query}"`);
+
+    const { data, error } = await supabase
+      .from(TABLE_NAME)
+      .select('artist, title, source, lyrics_preview, lyrics_length, created_at')
+      .or(`artist.ilike.${searchTerm},title.ilike.${searchTerm}`)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      console.error('❌ Simple search failed:', error);
+      return [];
+    }
+
+    console.log(`🎵 Found ${data?.length || 0} songs via simple search`);
+    return data || [];
+  } catch (error) {
+    console.error('❌ Failed to search songs:', error);
+    return [];
+  }
+}
+
+/**
+ * Busca inteligente: Primeiro Full-Text Search, depois busca simples
+ * @param query - Termo de busca
+ * @param limit - Número máximo de resultados
+ */
+export async function searchSongsIntelligent(
+  query: string,
+  limit = 20
+): Promise<any[]> {
+  try {
+    // Primeiro tenta busca por texto completo
+    const fullTextResults = await searchSongsByText(query, limit);
+
+    if (fullTextResults.length > 0) {
+      console.log(`✨ Intelligent search: Found ${fullTextResults.length} results via full-text search`);
+      return fullTextResults;
+    }
+
+    // Se não encontrou, tenta busca simples
+    console.log('✨ Intelligent search: Falling back to simple search');
+    const simpleResults = await searchSongsSimple(query, limit);
+
+    console.log(`✨ Intelligent search: Found ${simpleResults.length} results via simple search`);
+    return simpleResults;
+  } catch (error) {
+    console.error('❌ Intelligent search failed:', error);
     return [];
   }
 }

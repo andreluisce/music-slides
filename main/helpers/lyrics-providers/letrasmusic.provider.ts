@@ -1,582 +1,387 @@
-import {
-  createPage,
-  navigateWithRetry,
-  safeInnerText,
-  safeAttribute,
-  waitForSelector,
-  cleanLyricsText,
-  handleAdBlockerModal,
-  takeScreenshot,
-  handleConsentModal,
-} from './playwright.provider';
+import * as cheerio from 'cheerio';
 
-const BASE_URL = 'https://www.letras.mus.br';
+// Base URL for Letras.mus.br
+const LETRASMUS_BASE_URL = 'https://www.letras.mus.br';
 
-export interface LyricResult {
+// Types for the provider responses
+export interface SearchResult {
+  title: string;
+  artist: string;
+  url: string;
+  source: 'letrasmusic';
+}
+
+export interface LyricsResult {
   title: string;
   artist: string;
   lyrics: string;
-  source: string;
+  source: 'letrasmusic';
 }
 
 /**
- * Search for a song on Letras.mus.br and return the lyrics
+ * Fetches HTML content from a URL with proper headers and error handling
  */
-export async function searchByTitleAndArtist({
-  artist,
-  title,
-}: {
-  artist: string;
-  title: string;
-}): Promise<SongSearchResult[]> {
-  const page = await createPage();
-  const results: SongSearchResult[] = [];
-
+async function fetchHtml(url: string): Promise<string> {
+  console.log(`[LetrasMusic] Fetching: ${url}`);
+  
   try {
-    const query = `${artist} ${title}`.trim();
-    const searchUrl = `${BASE_URL}/?q=${encodeURIComponent(query)}`;
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'DNT': '1',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
+      },
+    });
 
-    console.log('🎵 Letras.mus.br searching:', query);
-    console.log('Search URL:', searchUrl);
-
-    const navigated = await navigateWithRetry(page, searchUrl);
-    if (!navigated) {
-      console.log('❌ Failed to navigate to Letras.mus.br search');
-      return [];
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
 
-    await handleAdBlockerModal(page);
-    await handleConsentModal(page);
-
-    console.log('🔍 Looking for search results...');
-
-    let hasResults = await waitForSelector(page, '.gs-title', 3000);
-    if (!hasResults) {
-      console.log('❌ Google Custom Search not found, trying fallback...');
-      hasResults = await waitForSelector(page, '.cnt-list-songs li', 2000);
-      if (!hasResults) {
-        return [];
-      }
-      console.log('✅ Using fallback selectors');
-
-      const fallbackItems = await page.$$('.cnt-list-songs li');
-
-      for (let i = 0; i < Math.min(fallbackItems.length, 10); i++) {
-        const item = fallbackItems[i];
-
-        const link = await item.$('a');
-        const titleEl = await item.$('.song-name');
-        const artistEl = await item.$('.song-artist');
-
-        const url = link ? await link.getAttribute('href') : '';
-        const titleText = titleEl ? await titleEl.textContent() : '';
-        const artistText = artistEl ? await artistEl.textContent() : '';
-
-        if (!url) continue;
-
-        const cleanUrl = url?.startsWith('http') ? url : `${BASE_URL}${url}`;
-
-        const songUrlPattern = /letras\.mus\.br\/[^\/]+\/[^\/]+\/?$/;
-        const isSpecificSong = songUrlPattern.test(cleanUrl);
-
-        const excludePatterns = [
-          /mais-tocadas/i,
-          /mais-acessadas/i,
-          /top-/i,
-          /playlist/i,
-          /\/$/, // Just artist page
-        ];
-
-        const shouldExclude = excludePatterns.some(pattern => pattern.test(cleanUrl));
-
-        if (!isSpecificSong || shouldExclude) {
-          console.log(`⏭️  Skipping non-song URL: ${cleanUrl}`);
-          continue;
-        }
-
-        if (titleText || artistText || url) {
-          results.push({
-            title: titleText?.trim() || '',
-            artist: artistText?.trim() || '',
-            url: cleanUrl,
-            source: 'letrasmusic',
-          });
-        }
-      }
-    } else {
-      console.log('✅ Found Google Custom Search results');
-
-      const linkElements = await page.$$('a.gs-title');
-
-      for (let i = 0; i < Math.min(linkElements.length, 10); i++) {
-        const link = linkElements[i];
-
-        const url = await link.getAttribute('href');
-        const titleText = await link.textContent();
-
-        if (!titleText || !url) {
-          continue;
-        }
-
-        const cleanUrl = url.startsWith('http') ? url : `${BASE_URL}${url}`;
-
-        const songUrlPattern = /letras\.mus\.br\/([^\/]+)\/([^\/]+)\/?$/;
-        const urlMatch = cleanUrl.match(songUrlPattern);
-
-        if (!urlMatch) {
-          console.log(`⏭️  Skipping - invalid URL format: ${cleanUrl}`);
-          continue;
-        }
-
-        const [, artistSlug, songId] = urlMatch;
-
-        const excludePatterns = [
-          /mais-tocadas/i,
-          /mais-acessadas/i,
-          /top-/i,
-          /playlist/i,
-        ];
-
-        const shouldExclude = excludePatterns.some(pattern =>
-          pattern.test(artistSlug) || pattern.test(songId)
-        );
-
-        if (shouldExclude) {
-          console.log(`⏭️  Skipping generic page: ${cleanUrl}`);
-          continue;
-        }
-
-        if (!songId || songId.length < 2) {
-          console.log(`⏭️  Skipping - invalid song ID: ${cleanUrl}`);
-          continue;
-        }
-
-        let titleResult = '';
-        let artistResult = '';
-
-        const cleanText = titleText.replace(/\s*-\s*LETRAS\.MUS\.BR.*$/i, '').trim();
-
-        const genericPagePatterns = [
-          /página do artista/i,
-          /enviar letras/i,
-          /traduções/i,
-          /e mais/i,
-          /^[^-]+$/, 
-        ];
-
-        const isGenericPage = genericPagePatterns.some(pattern => pattern.test(cleanText));
-
-        if (isGenericPage) {
-          console.log(`⏭️  Skipping generic page: ${cleanText}`);
-          continue;
-        }
-
-        const parts = cleanText.split(' - ');
-
-        if (parts.length < 2) {
-          console.log(`⏭️  Skipping - no title/artist separator: ${cleanText}`);
-          continue;
-        }
-
-        titleResult = parts[0].trim();
-        artistResult = parts[1].trim();
-
-        if (!titleResult || !artistResult) {
-          console.log(`⏭️  Skipping - empty title or artist: ${cleanText}`);
-          continue;
-        }
-
-        results.push({
-          title: titleResult || 'Música sem título',
-          artist: artistResult || 'Artista desconhecido',
-          url: cleanUrl,
-          source: 'letrasmusic',
-        });
-      }
-    }
-
-    console.log(`✅ Letras.mus.br found ${results.length} specific song results`);
-    return results;
+    const html = await response.text();
+    console.log(`[LetrasMusic] Successfully fetched ${html.length} characters`);
+    return html;
   } catch (error) {
-    console.error('❌ Letras.mus.br search error:', error.message);
-    return [];
-  } finally {
-    await page.close();
+    console.error(`[LetrasMusic] Failed to fetch ${url}:`, error);
+    throw error;
   }
 }
 
 /**
- * Scrape lyrics, title, and artist directly from a given Letras.mus.br song URL
+ * Cleans up text by removing extra whitespace and normalizing line breaks
  */
-export async function getLyrics(url: string): Promise<LyricResult | null> {
-  console.log('   🚀 Starting scrapeLyricsFromUrl for:', url);
-  const page = await createPage();
+function cleanText(text: string): string {
+  return text
+    .replace(/[\t ]+/g, ' ') // Replace multiple spaces/tabs with single space
+    .trim();
+}
 
+/**
+ * Cleans up lyrics text specifically
+ */
+function cleanLyrics(text: string): string {
+  return text
+    .split('\n')
+    .map(line => line.trim()) // Trim each line
+    .join('\n') // Join with newlines
+    .replace(/\n{3,}/g, '\n\n') // Max 2 consecutive line breaks
+    .replace(/\r\n/g, '\n') // Normalize line breaks
+    .replace(/\r/g, '\n') // Handle old Mac line breaks
+    .trim();
+}
+
+/**
+ * Searches for songs by artist and title on Letras.mus.br
+ * 
+ * @param options - Search parameters
+ * @param options.artist - Artist name
+ * @param options.title - Song title
+ * @returns Array of search results
+ */
+export async function searchByTitleAndArtist({ 
+  artist, 
+  title 
+}: { 
+  artist: string; 
+  title: string; 
+}): Promise<SearchResult[]> {
+  console.log(`[LetrasMusic] Searching for: "${artist}" - "${title}"`);
+  
   try {
-    console.log('   🌐 Navigating directly to song page:', url);
-
-    const songPageLoaded = await navigateWithRetry(page, url);
-    if (!songPageLoaded) {
-      console.log('   ❌ Failed to load song page from direct URL');
-      return null;
-    }
-
-    console.log('   ✅ Song page loaded successfully from direct URL');
-
-    // Handle consent modal on song page (quick check)
-    console.log('   👀 Checking for consent modal...');
-    await Promise.race([
-      handleConsentModal(page),
-      new Promise(resolve => setTimeout(resolve, 1000)) // Don't wait more than 1s for modals
-    ]);
-    console.log('   ✅ Consent modal check complete.');
-
-    // Extract lyrics using the native "Copy" feature - SUPER FAST!
-    console.log('   📝 Attempting to extract lyrics using native copy button...');
-
-    let rawLyrics = null;
-
-    try {
-      // Need to trigger the selection menu first by selecting some text
-      console.log('   🖱️  Triggering selection menu...');
-
-      // Find the lyrics container and select some text to trigger the menu
-      await page.evaluate(() => {
-        const lyricsContainer = document.querySelector('.lyric-original, .cnt-letra');
-        if (lyricsContainer) {
-          // Create a selection to trigger the menu
-          const range = document.createRange();
-          range.selectNodeContents(lyricsContainer);
-          const selection = window.getSelection();
-          selection?.removeAllRanges();
-          selection?.addRange(range);
-
-          // Trigger selection event
-          const event = new Event('mouseup', { bubbles: true });
-          lyricsContainer.dispatchEvent(event);
+    // Build search query and URL
+    const searchQuery = `${artist} ${title}`;
+    const searchUrl = `${LETRASMUS_BASE_URL}/?q=${encodeURIComponent(searchQuery)}#gsc.tab=0&gsc.q=${encodeURIComponent(searchQuery)}`;
+    
+    console.log(`[LetrasMusic] Search URL: ${searchUrl}`);
+    
+    // Fetch the search page HTML
+    const html = await fetchHtml(searchUrl);
+    
+    // Parse HTML with Cheerio
+    const $ = cheerio.load(html);
+    
+    // Wait a moment for potential dynamic content (though we're not using browser)
+    // Note: In a real scenario, we might need to handle the Google Custom Search results differently
+    // For now, we'll look for immediate results in the HTML
+    
+    const results: SearchResult[] = [];
+    
+    // Look for Google Custom Search results
+    $('.gsc-webResult').each((index, element) => {
+      try {
+        const $element = $(element);
+        const $link = $element.find('a.gs-title');
+        
+        if ($link.length > 0) {
+          const linkText = $link.text().trim();
+          const href = $link.attr('href');
+          
+          if (linkText && href) {
+            console.log(`[LetrasMusic] Found result: "${linkText}" -> ${href}`);
+            
+            const lowerCaseLinkText = linkText.toLowerCase();
+            const lowerCaseTitle = title.toLowerCase();
+            const lowerCaseArtist = artist.toLowerCase();
+            
+            // Flexible matching - check if both title and artist match
+            const titleMatch = lowerCaseLinkText.includes(lowerCaseTitle) || 
+                              href.includes(lowerCaseTitle.replace(/ /g, '-'));
+            const artistMatch = lowerCaseLinkText.includes(lowerCaseArtist) || 
+                               href.includes(lowerCaseArtist.replace(/ /g, '-'));
+            
+            if (titleMatch && artistMatch) {
+              // Parse title and artist from link text
+              let songTitle = linkText;
+              let songArtist = artist;
+              
+              if (linkText.includes(' - ')) {
+                const parts = linkText.split(' - ');
+                // Usually format is: "Song Title - Artist Name - LETRAS.MUS.BR"
+                if (parts.length >= 2) {
+                  songTitle = parts[0].trim();
+                  songArtist = parts[1].replace(' - LETRAS.MUS.BR', '').trim();
+                }
+              }
+              
+              const fullUrl = href.startsWith('http') ? href : `${LETRASMUS_BASE_URL}${href}`;
+              
+              results.push({
+                title: songTitle,
+                artist: songArtist,
+                url: fullUrl,
+                source: 'letrasmusic'
+              });
+            }
+          }
+        }
+      } catch (error) {
+        console.error(`[LetrasMusic] Error processing search result ${index}:`, error);
+      }
+    });
+    
+    // If no Google Custom Search results, try alternative approaches
+    if (results.length === 0) {
+      console.log('[LetrasMusic] No Google Custom Search results found, trying alternative approaches...');
+      
+      // Try direct search approach - construct likely URLs
+      const artistSlug = artist.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-');
+      const titleSlug = title.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-');
+      
+      const possibleUrls = [
+        `${LETRASMUS_BASE_URL}/${artistSlug}/${titleSlug}/`,
+        `${LETRASMUS_BASE_URL}/${artistSlug}/${titleSlug}.html`,
+        `${LETRASMUS_BASE_URL}/${artistSlug}/`,
+      ];
+      
+      // Try each possible URL to see if it exists
+      for (const url of possibleUrls) {
+        try {
+          console.log(`[LetrasMusic] Trying direct URL: ${url}`);
+          const testResponse = await fetch(url, { method: 'HEAD' });
+          if (testResponse.ok) {
+            console.log(`[LetrasMusic] Found direct URL: ${url}`);
+            results.push({
+              title: title,
+              artist: artist,
+              url: url,
+              source: 'letrasmusic'
+            });
+            break;
+          }
+        } catch (error) {
+          // URL doesn't exist, continue to next
+        }
+      }
+      
+      // Also look for any song links on the current page
+      $('a[href*="letras.mus.br"]').each((index, element) => {
+        try {
+          const $element = $(element);
+          const linkText = $element.text().trim();
+          const href = $element.attr('href');
+          
+          if (linkText && href && linkText.length > 5 && !href.includes('#') && !href.includes('?')) {
+            const lowerCaseLinkText = linkText.toLowerCase();
+            const lowerCaseTitle = title.toLowerCase();
+            const lowerCaseArtist = artist.toLowerCase();
+            
+            // More flexible matching
+            if ((lowerCaseLinkText.includes(lowerCaseTitle.split(' ')[0]) || 
+                 lowerCaseLinkText.includes(lowerCaseArtist.split(' ')[0])) &&
+                href.includes('/')) {
+              
+              const fullUrl = href.startsWith('http') ? href : `${LETRASMUS_BASE_URL}${href}`;
+              
+              results.push({
+                title: linkText,
+                artist: artist,
+                url: fullUrl,
+                source: 'letrasmusic'
+              });
+            }
+          }
+        } catch (error) {
+          console.error(`[LetrasMusic] Error processing link ${index}:`, error);
         }
       });
-
-      // Wait a tiny bit for the menu to appear
-      await page.waitForTimeout(200);
-
-      // Now click the "Copy All" button using its ID
-      const copyAllButton = page.locator('#js-selectionOptions-copyAll');
-      const isVisible = await copyAllButton.isVisible().catch(() => false);
-
-      if (isVisible) {
-        console.log('   ✅ Found copy button, clicking it...');
-        await copyAllButton.click();
-
-        // Wait a moment for clipboard to be populated
-        await page.waitForTimeout(100);
-
-        // Get the copied text from clipboard
-        rawLyrics = await page.evaluate(async () => {
-          try {
-            return await navigator.clipboard.readText();
-          } catch (e) {
-            return null;
-          }
-        });
-
-        if (rawLyrics && rawLyrics.length > 10) {
-          console.log('   ✅ Lyrics copied from clipboard successfully! Length:', rawLyrics.length);
-        } else {
-          console.log('   ❌ Lyrics not copied or too short from clipboard.');
-        }
-      } else {
-        console.log('   ⚠️  Copy button not visible, trying fallback');
-      }
-    } catch (error) {
-      console.log('   ⚠️  Copy button method failed:', error.message);
     }
+    
+    console.log(`[LetrasMusic] Found ${results.length} matching results`);
+    
+    // Remove duplicates based on URL
+    const uniqueResults = results.filter((result, index, self) => 
+      index === self.findIndex(r => r.url === result.url)
+    );
+    
+    console.log(`[LetrasMusic] Returning ${uniqueResults.length} unique results`);
+    return uniqueResults;
+    
+  } catch (error) {
+    console.error('[LetrasMusic] Search failed:', error);
+    return [];
+  }
+}
 
-    // Fallback: Extract from DOM if copy button didn't work
-    if (!rawLyrics || rawLyrics.length < 10) {
-      console.log('   📝 Using fallback DOM extraction...');
-      const lyricsSelectors = ['.lyric-original', '.cnt-letra', '.lyric-content'];
-
-      for (const selector of lyricsSelectors) {
-        const text = await safeInnerText(page, selector);
-        if (text && text.length > 10) {
-          rawLyrics = text;
-          console.log(`   ✅ Found lyrics using selector: ${selector}`);
+/**
+ * Extracts lyrics from a Letras.mus.br song page
+ * 
+ * @param url - URL of the song page
+ * @returns Lyrics data or null if not found
+ */
+export async function getLyrics(url: string): Promise<LyricsResult | null> {
+  console.log(`[LetrasMusic] Extracting lyrics from: ${url}`);
+  
+  try {
+    // Fetch the lyrics page HTML
+    const html = await fetchHtml(url);
+    
+    // Parse HTML with Cheerio
+    const $ = cheerio.load(html);
+    
+    // Extract lyrics using multiple selectors (in order of preference)
+    let lyrics = '';
+    const lyricsSelectors = [
+      '.lyric-original',
+      '.cnt-letra p',
+      '.lyric-content',
+      '.letra-musica',
+      '.lyrics'
+    ];
+    
+    for (const selector of lyricsSelectors) {
+      const $lyricsElement = $(selector);
+      if ($lyricsElement.length > 0) {
+        lyrics = $lyricsElement.text().trim();
+        console.log(`[LetrasMusic] Found lyrics using selector: ${selector}`);
+        break;
+      }
+    }
+    
+    if (!lyrics) {
+      console.log('[LetrasMusic] No lyrics found with any selector');
+      return null;
+    }
+    
+    // Extract title from page
+    let title = '';
+    const titleSelectors = ['h1', '.head-title', '.song-title', 'title'];
+    
+    for (const selector of titleSelectors) {
+      const $titleElement = $(selector);
+      if ($titleElement.length > 0) {
+        title = cleanText($titleElement.text());
+        // Clean up title if it contains site name
+        title = title.replace(' - LETRAS.MUS.BR', '').trim();
+        if (title) {
+          console.log(`[LetrasMusic] Found title using selector: ${selector} -> "${title}"`);
           break;
         }
       }
-      if (!rawLyrics || rawLyrics.length < 10) {
-        console.log('   ❌ Fallback DOM extraction failed to find sufficient lyrics.');
-      }
-    }
-
-    console.log(`   📝 Raw lyrics length: ${rawLyrics?.length || 0}`);
-    if (rawLyrics) {
-      console.log(`   📝 Lyrics preview: ${rawLyrics.substring(0, Math.min(rawLyrics.length, 200))}...`);
-    }
-
-    if (!rawLyrics || rawLyrics.length < 10) {
-      console.log('   ❌ Lyrics text is too short or empty');
-      return null;
-    }
-
-    // Extract title and artist in parallel (fast!)
-    console.log('   🔍 Extracting title and artist...');
-
-    const [pageTitle, pageArtist] = await Promise.all([
-      // Title selectors
-      (async () => {
-        const titleSelectors = ['h1.lyric-title', 'h1.song-title', 'h1', '.head-title'];
-        for (const sel of titleSelectors) {
-          const text = await safeInnerText(page, sel);
-          if (text) return text;
-        }
-        return null;
-      })(),
-      // Artist selectors
-      (async () => {
-        const artistSelectors = ['h2.lyric-artist a', 'h2.song-artist a', '.head-info-artist a', '.head-info-artist', 'h2 a', '.head-info a'];
-        for (const sel of artistSelectors) {
-          const text = await safeInnerText(page, sel);
-          if (text) return text;
-        }
-        return null;
-      })()
-    ]);
-
-    console.log(`   📝 Page title: "${pageTitle}"`);
-    console.log(`   🎤 Page artist: "${pageArtist}"`);
-
-    // Try to extract artist from URL if page selectors failed
-    let extractedArtist = pageArtist || ''; // No artist from search query here
-    if (!extractedArtist && url) {
-      const urlMatch = url.match(/letras\.mus\.br\/([^\/]+)\//);
-      if (urlMatch) {
-        extractedArtist = urlMatch[1].replace(/-/g, ' ');
-        console.log('   📌 Extracted artist from URL:', extractedArtist);
-      }
-    }
-
-    const cleanedLyrics = cleanLyricsText(rawLyrics);
-
-    console.log('   ✅ Letras.mus.br found lyrics successfully!');
-    console.log(`   📝 Final title: "${pageTitle || 'Unknown Title'}"`);
-    console.log(`   🎤 Final artist: "${extractedArtist || 'Unknown Artist'}"`);
-    console.log(`   📝 Cleaned lyrics length: ${cleanedLyrics.length}`);
-
-    return {
-      title: pageTitle || 'Unknown Title',
-      artist: extractedArtist || 'Unknown Artist',
-      lyrics: cleanedLyrics,
-      source: 'letrasmusic',
-    };
-  } catch (error) {
-    console.error('   ❌ Letras.mus.br direct scraping error:', error.message);
-    return null;
-  } finally {
-    await page.close();
-    console.log('   🛑 Finished scrapeLyricsFromUrl.');
-  }
-}
-
-/**
- * Find songs by any search term
- */
-export async function findByAnyParameter(searchTerm: string): Promise<any[]> {
-  const page = await createPage();
-
-  try {
-    const searchUrl = `${BASE_URL}/?q=${encodeURIComponent(searchTerm)}`;
-
-    console.log('🔍 Letras.mus.br searching:', searchTerm);
-
-    const navigated = await navigateWithRetry(page, searchUrl);
-    if (!navigated) {
-      return [];
-    }
-
-    // Handle modals quickly (don't wait too long)
-    await Promise.race([
-      Promise.all([handleAdBlockerModal(page), handleConsentModal(page)]),
-      new Promise(resolve => setTimeout(resolve, 1500)) // Max 1.5s for modals
-    ]);
-
-    // Try multiple selectors quickly - don't wait 8 seconds!
-    console.log('🔍 Looking for search results...');
-
-    let hasResults = await waitForSelector(page, '.gs-title', 3000); // Reduced from 8s to 3s
-    if (!hasResults) {
-      console.log('❌ Google Custom Search not found, trying fallback...');
-      hasResults = await waitForSelector(page, '.cnt-list-songs li', 2000); // Reduced from 3s to 2s
-      if (!hasResults) {
-        return [];
-      }
-      console.log('✅ Using fallback selectors');
-
-      // Get fallback results using manual element handling
-      const fallbackItems = await page.$$('.cnt-list-songs li');
-      const fallbackResults = [];
-
-      for (let i = 0; i < Math.min(fallbackItems.length, 10); i++) {
-        const item = fallbackItems[i];
-
-        const link = await item.$('a');
-        const titleEl = await item.$('.song-name');
-        const artistEl = await item.$('.song-artist');
-
-        const url = link ? await link.getAttribute('href') : '';
-        const title = titleEl ? await titleEl.textContent() : '';
-        const artist = artistEl ? await artistEl.textContent() : '';
-
-        if (!url) continue;
-
-        const cleanUrl = url?.startsWith('http') ? url : `${BASE_URL}${url}`;
-
-        // FILTER: Only include URLs that are specific songs
-        const songUrlPattern = /letras\.mus\.br\/[^\/]+\/[^\/]+\/?$/;
-        const isSpecificSong = songUrlPattern.test(cleanUrl);
-
-        const excludePatterns = [
-          /mais-tocadas/i,
-          /mais-acessadas/i,
-          /top-/i,
-          /playlist/i,
-          /\/$/, // Just artist page
-        ];
-
-        const shouldExclude = excludePatterns.some(pattern => pattern.test(cleanUrl));
-
-        if (!isSpecificSong || shouldExclude) {
-          console.log(`⏭️  Skipping non-song URL: ${cleanUrl}`);
-          continue;
-        }
-
-        if (title || artist || url) {
-          fallbackResults.push({
-            title: title?.trim() || '',
-            artist: artist?.trim() || '',
-            url: cleanUrl,
-            source: 'letrasmusic',
-          });
-        }
-      }
-
-      console.log(`✅ Found ${fallbackResults.length} specific song results (fallback)`);
-      return fallbackResults;
-    }
-
-    console.log('✅ Found Google Custom Search results');
-
-    // Get Google Custom Search results - avoid transpilation by using manual element handling
-    const linkElements = await page.$$('a.gs-title');
-    const results = [];
-
-    for (let i = 0; i < Math.min(linkElements.length, 10); i++) {
-      const link = linkElements[i];
-
-      const url = await link.getAttribute('href');
-      const titleText = await link.textContent();
-
-      if (!titleText || !url) {
-        continue;
-      }
-
-      const cleanUrl = url.startsWith('http') ? url : `${BASE_URL}${url}`;
-
-      // FILTER: Only include URLs with format /artist-name/song-id/
-      // The second segment (song-id) is what makes it a specific song page
-      const songUrlPattern = /letras\.mus\.br\/([^\/]+)\/([^\/]+)\/?$/;
-      const urlMatch = cleanUrl.match(songUrlPattern);
-
-      if (!urlMatch) {
-        console.log(`⏭️  Skipping - invalid URL format: ${cleanUrl}`);
-        continue;
-      }
-
-      const [, artistSlug, songId] = urlMatch;
-
-      // FILTER: Exclude common non-song pages by checking the slug patterns
-      const excludePatterns = [
-        /mais-tocadas/i,
-        /mais-acessadas/i,
-        /top-/i,
-        /playlist/i,
-      ];
-
-      const shouldExclude = excludePatterns.some(pattern =>
-        pattern.test(artistSlug) || pattern.test(songId)
-      );
-
-      if (shouldExclude) {
-        console.log(`⏭️  Skipping generic page: ${cleanUrl}`);
-        continue;
-      }
-
-      // Validate that songId looks like an actual song ID (not a generic page)
-      // Song IDs on Letras.mus.br are typically song titles in kebab-case
-      if (!songId || songId.length < 2) {
-        console.log(`⏭️  Skipping - invalid song ID: ${cleanUrl}`);
-        continue;
-      }
-
-      let title = '';
-      let artist = '';
-
-      // Clean and parse the title text
-      const cleanText = titleText.replace(/\s*-\s*LETRAS\.MUS\.BR.*$/i, '').trim();
-
-      // FILTER: Skip if text indicates it's a generic page (not a song)
-      const genericPagePatterns = [
-        /página do artista/i,
-        /enviar letras/i,
-        /traduções/i,
-        /e mais/i,
-        /^[^-]+$/,  // No " - " separator means it's likely not a song title
-      ];
-
-      const isGenericPage = genericPagePatterns.some(pattern => pattern.test(cleanText));
-
-      if (isGenericPage) {
-        console.log(`⏭️  Skipping generic page: ${cleanText}`);
-        continue;
-      }
-
-      const parts = cleanText.split(' - ');
-
-      // MUST have at least 2 parts (title - artist) to be a valid song
-      if (parts.length < 2) {
-        console.log(`⏭️  Skipping - no title/artist separator: ${cleanText}`);
-        continue;
-      }
-
-      title = parts[0].trim();
-      artist = parts[1].trim();
-
-      // Validate that we have both title and artist
-      if (!title || !artist) {
-        console.log(`⏭️  Skipping - empty title or artist: ${cleanText}`);
-        continue;
-      }
-
-      results.push({
-        title: title || 'Música sem título',
-        artist: artist || 'Artista desconhecido',
-        url: cleanUrl,
-      });
-    }
-
-    console.log(`✅ Letras.mus.br found ${results.length} specific song results`);
-
-    // Add source to each result
-    for (let i = 0; i < results.length; i++) {
-      results[i].source = 'letrasmusic';
     }
     
-    return results;
+    // Extract artist from page
+    let artist = '';
+    const artistSelectors = [
+      '.head-info-artist a',
+      '.lyric-artist a',
+      '.artist-name',
+      '.head-info a'
+    ];
+    
+    for (const selector of artistSelectors) {
+      const $artistElement = $(selector);
+      if ($artistElement.length > 0) {
+        artist = cleanText($artistElement.text());
+        if (artist) {
+          console.log(`[LetrasMusic] Found artist using selector: ${selector} -> "${artist}"`);
+          break;
+        }
+      }
+    }
+    
+    // If we couldn't extract title/artist from page, try to parse from URL
+    if (!title || !artist) {
+      const urlParts = url.split('/');
+      if (urlParts.length >= 4) {
+        // URL format is usually: https://www.letras.mus.br/artist-name/song-name/
+        const artistFromUrl = urlParts[3].replace(/-/g, ' ');
+        const titleFromUrl = urlParts[4] ? urlParts[4].replace(/-/g, ' ') : '';
+        
+        if (!artist && artistFromUrl) {
+          artist = artistFromUrl;
+          console.log(`[LetrasMusic] Extracted artist from URL: "${artist}"`);
+        }
+        if (!title && titleFromUrl) {
+          title = titleFromUrl;
+          console.log(`[LetrasMusic] Extracted title from URL: "${title}"`);
+        }
+      }
+    }
+    
+    // Clean up the lyrics text
+    const cleanedLyrics = cleanLyrics(lyrics);
+    
+    if (!cleanedLyrics) {
+      console.log('[LetrasMusic] Lyrics text is empty after cleaning');
+      return null;
+    }
+    
+    const result: LyricsResult = {
+      title: title || 'Unknown Title',
+      artist: artist || 'Unknown Artist',
+      lyrics: cleanedLyrics,
+      source: 'letrasmusic'
+    };
+    
+    console.log(`[LetrasMusic] Successfully extracted lyrics: "${result.title}" by "${result.artist}" (${cleanedLyrics.length} characters)`);
+    return result;
+    
   } catch (error) {
-    console.error('❌ Letras.mus.br search error:', error.message);
-    return [];
-  } finally {
-    await page.close();
+    console.error(`[LetrasMusic] Failed to extract lyrics from ${url}:`, error);
+    return null;
   }
 }
+
+// Export a class-based interface for compatibility with existing code
+export class LetrasMusProvider {
+  constructor() {}
+  
+  async searchByTitleAndArtist(params: { artist: string; title: string }): Promise<SearchResult[]> {
+    return searchByTitleAndArtist(params);
+  }
+  
+  async getLyrics(url: string): Promise<LyricsResult | null> {
+    return getLyrics(url);
+  }
+}
+
+// Default export for convenience
+export default {
+  searchByTitleAndArtist,
+  getLyrics,
+  LetrasMusProvider
+};
