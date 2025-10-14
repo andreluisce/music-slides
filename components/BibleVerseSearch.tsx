@@ -3,15 +3,24 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 
+interface BibleVerseResult {
+  reference: string;
+  text: string;
+}
+
 const api = typeof window !== 'undefined' ? window.api : undefined;
 
 export const BibleVerseSearch = () => {
   const [book, setBook] = useState('');
   const [chapter, setChapter] = useState('');
   const [verse, setVerse] = useState('');
-  const [result, setResult] = useState(null);
+  const [result, setResult] = useState<BibleVerseResult | null>(null);
 
   const handleSearch = async () => {
+    if (!api) {
+      console.error("API is not available.");
+      return;
+    }
     const response = await api.getBibleVerse(book, parseInt(chapter), parseInt(verse), 'nvi');
     setResult(response);
   };

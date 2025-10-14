@@ -143,42 +143,49 @@ export default function CommandPalette({
                 {/* Preview Panel */}
                 <div className="w-96 overflow-y-auto p-4">
                   {results[selectedIndex] && (
-                    <div>
-                      {/* Song Info */}
-                      <div className="mb-4">
-                        <div className="mb-2 text-lg font-bold text-white">
-                          {results[selectedIndex].title}
-                        </div>
-                        <div className="text-sm text-slate-400">
-                          {results[selectedIndex].artist}
-                        </div>
-                      </div>
+                    (() => {
+                      const selectedSong = results[selectedIndex];
+                      if (!selectedSong) return null; // Should not happen due to outer check, but for type safety
 
-                      {/* Preview */}
-                      {results[selectedIndex].preview && (
-                        <div className="space-y-4">
-                          <div className="rounded-lg border border-white/10 bg-white/5 p-4">
-                            {results[selectedIndex].preview.map((line, i) => (
-                              <div
-                                key={i}
-                                className="text-sm text-slate-300"
-                              >
-                                {line}
-                              </div>
-                            ))}
+                      return (
+                        <div>
+                          {/* Song Info */}
+                          <div className="mb-4">
+                            <div className="mb-2 text-lg font-bold text-white">
+                              {selectedSong.title}
+                            </div>
+                            <div className="text-sm text-slate-400">
+                              {selectedSong.artist}
+                            </div>
                           </div>
 
-                          <motion.button
-                            onClick={() => onImportSong(results[selectedIndex])}
-                            className="w-full rounded-lg bg-gradient-to-r from-magenta to-purple-500 px-4 py-2 text-sm font-medium text-white hover:from-magenta-600 hover:to-purple-600"
-                            whileHover={{ scale: 1.02 }}
-                            whileTap={{ scale: 0.98 }}
-                          >
-                            Importar Música
-                          </motion.button>
+                          {/* Preview */}
+                          {selectedSong.preview && (
+                            <div className="space-y-4">
+                              <div className="rounded-lg border border-white/10 bg-white/5 p-4">
+                                {selectedSong.preview.map((line, i) => (
+                                  <div
+                                    key={i}
+                                    className="text-sm text-slate-300"
+                                  >
+                                    {line}
+                                  </div>
+                                ))}
+                              </div>
+
+                              <motion.button
+                                onClick={() => onImportSong(selectedSong)}
+                                className="w-full rounded-lg bg-gradient-to-r from-magenta to-purple-500 px-4 py-2 text-sm font-medium text-white hover:from-magenta-600 hover:to-purple-600"
+                                whileHover={{ scale: 1.02 }}
+                                whileTap={{ scale: 0.98 }}
+                              >
+                                Importar Música
+                              </motion.button>
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
+                      );
+                    })()
                   )}
                 </div>
               </div>

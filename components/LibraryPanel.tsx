@@ -84,9 +84,9 @@ export default function LibraryPanel() {
   const handleOpenLyrics = async (song: any) => {
     try {
       if (song.filePath) {
-        await window.api?.openLyricsWindow(undefined, song.filePath);
+        await window.api?.openPresentationWindow(song.artist, song.title, song.filePath);
       } else if (song.url) {
-        await window.api?.openLyricsWindow(song.url);
+        await window.api?.openPresentationWindow(song.artist, song.title, song.url);
       }
     } catch (error) {
       console.error('Error opening lyrics:', error);

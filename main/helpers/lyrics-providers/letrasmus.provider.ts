@@ -5,6 +5,7 @@ import { LyricsProvider } from './playwright.provider';
 const LETRASMUS_URL = 'https://www.letras.mus.br';
 
 export class LetrasMusProvider implements LyricsProvider {
+  public url: string = LETRASMUS_URL;
 
   constructor() {
   }

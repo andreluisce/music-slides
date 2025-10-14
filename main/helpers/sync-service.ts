@@ -11,8 +11,15 @@
 import { readSong, saveSong, getAllSongsGroupedByArtist, songExists, createSongFileContent, parseSongFileContent } from './file-system';
 import { uploadSongToSupabase, downloadSongFromSupabase } from './supabase-sync';
 import { createClient } from '@supabase/supabase-js';
+import { Tables } from '../../lib/supabase';
 
 export type SyncStatus = 'synced' | 'local-only' | 'cloud-only' | 'syncing' | 'conflict' | 'error';
+
+interface SongMetadata {
+  updatedAt?: string;
+  createdAt?: string;
+  [key: string]: any; // Allow other properties
+}
 
 export interface UnifiedSong {
   artist: string;
@@ -22,7 +29,7 @@ export interface UnifiedSong {
   cloudId?: string;
   localUpdatedAt?: string;
   cloudUpdatedAt?: string;
-  metadata?: any;
+  metadata?: SongMetadata;
 }
 
 /**
@@ -44,7 +51,7 @@ export async function getUnifiedSongList(): Promise<UnifiedSong[]> {
         const filePath = `${group.normalizedArtist}/${song.normalizedTitle}.json`;
 
         // Read song to get metadata
-        let metadata = {};
+        let metadata: SongMetadata = {};
         let localUpdatedAt = '';
         try {
           const songData = await readSong(group.artist, song.title);
@@ -65,7 +72,7 @@ export async function getUnifiedSongList(): Promise<UnifiedSong[]> {
       }
     }
   } catch (error) {
-    console.error('❌ Error loading local songs:', error.message);
+    console.error('❌ Error loading local songs:', error as Error);
   }
 
   // 2. Load Supabase songs
@@ -86,7 +93,7 @@ export async function getUnifiedSongList(): Promise<UnifiedSong[]> {
       .select('id, artist, title, updated_at, metadata');
 
     if (error) {
-      console.error('❌ Error loading Supabase songs:', error);
+      console.error('❌ Error loading Supabase songs:', error as Error);
       return Array.from(songMap.values());
     }
 
@@ -118,7 +125,7 @@ export async function getUnifiedSongList(): Promise<UnifiedSong[]> {
           ...existing,
           syncStatus: status,
           cloudId: cloudSong.id,
-          cloudUpdatedAt: cloudDate,
+          cloudUpdatedAt: cloudSong.updated_at,
         });
       } else {
         // Song only exists in cloud
@@ -128,13 +135,13 @@ export async function getUnifiedSongList(): Promise<UnifiedSong[]> {
           syncStatus: 'cloud-only',
           cloudId: cloudSong.id,
           cloudUpdatedAt: cloudSong.updated_at,
-          metadata: cloudSong.metadata || {},
+          metadata: (cloudSong.metadata || {}) as SongMetadata,
         });
       }
     }
 
   } catch (error) {
-    console.error('❌ Error processing Supabase songs:', error.message);
+    console.error('❌ Error processing Supabase songs:', (error as Error).message);
   }
 
   const unifiedList = Array.from(songMap.values());
@@ -171,7 +178,7 @@ export async function syncSongToCloud(artist: string, title: string): Promise<bo
 
     return true;
   } catch (error) {
-    console.error(`❌ Error syncing to cloud: ${artist} - ${title}`, error.message);
+    console.error(`❌ Error syncing to cloud: ${artist} - ${title}`, (error as Error).message);
     return false;
   }
 }
@@ -202,7 +209,7 @@ export async function syncSongFromCloud(artist: string, title: string): Promise<
     console.log(`✅ Downloaded from cloud: ${artist} - ${title}`);
     return true;
   } catch (error) {
-    console.error(`❌ Error syncing from cloud: ${artist} - ${title}`, error.message);
+    console.error(`❌ Error syncing from cloud: ${artist} - ${title}`, (error as Error).message);
     return false;
   }
 }
@@ -300,7 +307,7 @@ export async function performFullSync(options: {
 
         stats.conflicts++;
       } catch (error) {
-        console.error(`   ❌ Error resolving conflict: ${song.artist} - ${song.title}`, error.message);
+        console.error(`   ❌ Error resolving conflict: ${song.artist} - ${song.title}`, (error as Error).message);
         stats.errors++;
       }
     }

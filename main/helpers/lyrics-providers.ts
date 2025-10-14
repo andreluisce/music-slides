@@ -1,4 +1,4 @@
-import { Playwright, chromium } from 'playwright';
+import { chromium } from 'playwright';
 
 interface SearchResult {
   artist: string;

@@ -29,7 +29,7 @@ export default function App() {
             console.log('🎯 Showing onboarding in browser mode');
             setMode('onboarding');
           } else {
-            setMode('mostrar');
+            setMode('library');
           }
 
           setIsChecking(false);
@@ -42,12 +42,12 @@ export default function App() {
           setMode('onboarding');
         } else if (mode === 'onboarding') {
           // If onboarding is complete but mode is still onboarding, switch to default
-          setMode('mostrar');
+          setMode('library');
         }
       } catch (error) {
         console.error('Error checking onboarding status:', error);
         // On error, show main app
-        setMode('mostrar');
+        setMode('library');
       } finally {
         setIsChecking(false);
       }

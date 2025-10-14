@@ -72,7 +72,7 @@ export const formatLyrics = async (lyrics: string) => {
 
 
 export const searchByTitleAndArtistExact = async ({ artist, title }: { artist: string; title: string }) => {
-  let result = await letrasmus.searchByTitleAndArtistExact({ artist, title });
+  let result = await letrasmus.searchByTitleAndArtist({ artist, title });
   return result || { artist, title, lyrics: '' };
 };
 

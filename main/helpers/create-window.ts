@@ -2,6 +2,20 @@ import { screen, BrowserWindow, BrowserWindowConstructorOptions } from 'electron
 import path from 'path';
 import Store from 'electron-store';
 
+interface WindowState {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+interface Bounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 const createWindow = (
   windowName: string,
   options: BrowserWindowConstructorOptions
@@ -10,13 +24,13 @@ const createWindow = (
   const name = `window-state-${windowName}`;
   const store = new Store({ name });
   const defaultSize = {
-    width: options.width,
-    height: options.height,
+    width: options.width || 800,
+    height: options.height || 600,
   };
-  let state = {};
-  let win;
+  let state: WindowState = {};
+  let win: BrowserWindow;
 
-  const restore = () => store.get(key, defaultSize);
+  const restore = () => store.get(key, defaultSize) as WindowState;
 
   const getCurrentPosition = () => {
     const position = win.getPosition();
@@ -29,7 +43,7 @@ const createWindow = (
     };
   };
 
-  const windowWithinBounds = (windowState, bounds) => {
+  const windowWithinBounds = (windowState: WindowState, bounds: Bounds) => {
     return (
       windowState.x >= bounds.x &&
       windowState.y >= bounds.y &&
@@ -46,7 +60,7 @@ const createWindow = (
     });
   };
 
-  const ensureVisibleOnSomeDisplay = windowState => {
+  const ensureVisibleOnSomeDisplay = (windowState: WindowState): WindowState => {
     const visible = screen.getAllDisplays().some(display => {
       return windowWithinBounds(windowState, display.bounds);
     });

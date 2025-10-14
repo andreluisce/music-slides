@@ -14,7 +14,7 @@ const TABLE_NAME = 'songs'; // Nome da tabela
 // Lazy-loaded Supabase client
 let supabaseClient: SupabaseClient | null = null;
 
-function getSupabaseClient(): SupabaseClient {
+export function getSupabaseClient() {
   if (!supabaseClient) {
     const supabaseUrl = process.env.SUPABASE_URL || '';
     const supabaseKey = process.env.SUPABASE_ANON_KEY || '';

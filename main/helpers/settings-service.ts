@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { Tables } from '../../lib/supabase';
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_ANON_KEY;
@@ -19,6 +20,9 @@ export interface AppSettings {
   imagesPath: string;
   videosPath: string;
 }
+
+// Interface to match Supabase table row structure (snake_case)
+interface AppSettingsRow extends Tables<'app_settings'> {}
 
 const defaultSettings: AppSettings = {
   language: 'pt-BR',
@@ -54,16 +58,18 @@ export async function getSettings(): Promise<AppSettings> {
       throw error;
     }
 
+    const settingsData = data as AppSettingsRow; // Cast data to AppSettingsRow
+
     return {
-      language: data.language || defaultSettings.language,
-      use24Hour: data.use24hour || defaultSettings.use24Hour,
-      dataPath: data.data_path || defaultSettings.dataPath,
-      lyricsPath: data.lyrics_path || defaultSettings.lyricsPath,
-      imagesPath: data.images_path || defaultSettings.imagesPath,
-      videosPath: data.videos_path || defaultSettings.videosPath,
+      language: settingsData.language || defaultSettings.language,
+      use24Hour: settingsData.use24hour || defaultSettings.use24Hour,
+      dataPath: settingsData.data_path || defaultSettings.dataPath,
+      lyricsPath: settingsData.lyrics_path || defaultSettings.lyricsPath,
+      imagesPath: settingsData.images_path || defaultSettings.imagesPath,
+      videosPath: settingsData.videos_path || defaultSettings.videosPath,
     };
   } catch (error) {
-    console.error('❌ Error getting settings from Supabase:', error);
+    console.error('❌ Error getting settings from Supabase:', error as Error);
     return defaultSettings;
   }
 }
@@ -88,7 +94,7 @@ async function createSettings(settings: AppSettings): Promise<AppSettings> {
         images_path: settings.imagesPath,
         videos_path: settings.videosPath,
         updated_at: new Date().toISOString(),
-      })
+      } as TablesInsert<'app_settings'>) // Cast to Insert type
       .select()
       .single();
 
@@ -97,7 +103,7 @@ async function createSettings(settings: AppSettings): Promise<AppSettings> {
     console.log('✅ Settings created in Supabase');
     return settings;
   } catch (error) {
-    console.error('❌ Error creating settings in Supabase:', error);
+    console.error('❌ Error creating settings in Supabase:', error as Error);
     return settings;
   }
 }
@@ -124,14 +130,14 @@ export async function updateSetting(key: keyof AppSettings, value: any): Promise
       .update({
         [dbKey]: value,
         updated_at: new Date().toISOString(),
-      })
+      } as Partial<TablesUpdate<'app_settings'>>)
       .eq('id', 1); // Assuming single row with id = 1
 
     if (error) throw error;
 
     console.log(`✅ Setting '${key}' updated in Supabase`);
   } catch (error) {
-    console.error(`❌ Error updating setting '${key}' in Supabase:`, error);
+    console.error(`❌ Error updating setting '${key}' in Supabase:`, error as Error);
     throw error;
   }
 }
@@ -146,7 +152,7 @@ export async function updateSettings(settings: Partial<AppSettings>): Promise<vo
   }
 
   try {
-    const updateData: any = { updated_at: new Date().toISOString() };
+    const updateData: Partial<TablesUpdate<'app_settings'>> = { updated_at: new Date().toISOString() };
 
     if (settings.language !== undefined) updateData.language = settings.language;
     if (settings.use24Hour !== undefined) updateData.use24hour = settings.use24Hour;
@@ -164,7 +170,7 @@ export async function updateSettings(settings: Partial<AppSettings>): Promise<vo
 
     console.log('✅ Settings updated in Supabase');
   } catch (error) {
-    console.error('❌ Error updating settings in Supabase:', error);
+    console.error('❌ Error updating settings in Supabase:', error as Error);
     throw error;
   }
 }

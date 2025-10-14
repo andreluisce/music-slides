@@ -40,8 +40,8 @@ export default function EditorPanel() {
 
   const loadPresentations = async () => {
     try {
-      const fetchedPresentations = await window.electron.getAllPresentations();
-      setPresentations(fetchedPresentations);
+      const fetchedPresentations = await window.api?.getAllPresentations();
+      setPresentations(fetchedPresentations || []);
     } catch (error) {
       console.error('Error loading presentations:', error);
     }
@@ -51,7 +51,7 @@ export default function EditorPanel() {
     if (!newPresentationName.trim()) return;
 
     try {
-      const newPresentation = await window.electron.createPresentation({
+      const newPresentation = await window.api?.createPresentation({
         name: newPresentationName,
         status: 'draft',
         date: new Date().toISOString(),
@@ -67,8 +67,8 @@ export default function EditorPanel() {
 
   const loadPresentationItems = async (presentationId: string) => {
     try {
-      const items = await window.electron.getPresentationItems(presentationId);
-      setPresentationItems(items);
+      const items = await window.api?.getPresentationItems(presentationId);
+      setPresentationItems(items || []);
     } catch (error) {
       console.error('Error loading presentation items:', error);
     }
@@ -219,7 +219,7 @@ export default function EditorPanel() {
                     }
                     onBlur={async () => {
                       if (selectedPresentation) {
-                        await window.electron.updatePresentation(
+                        await window.api?.updatePresentation(
                           selectedPresentation.id,
                           { name: selectedPresentation.name }
                         );

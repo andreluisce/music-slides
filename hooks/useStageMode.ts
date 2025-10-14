@@ -2,7 +2,7 @@
 import { create } from 'zustand';
 import { Presentation } from '../lib/presentation-types';
 
-type StageMode = 'mostrar' | 'editar' | 'palco' | 'videos' | 'bible' | 'themes' | 'settings' | 'onboarding' | 'live';
+type StageMode = 'library' | 'editor' | 'stage' | 'videos' | 'bible' | 'themes' | 'settings' | 'onboarding' | 'live' | 'help';
 
 interface CurrentSong {
   title: string;
@@ -19,7 +19,7 @@ export const useStageMode = create<{
   selectedPresentation: Presentation | null;
   setSelectedPresentation: (presentation: Presentation | null) => void;
 }>((set) => ({
-  mode: 'mostrar',
+  mode: 'library',
   setMode: (mode) => set({ mode }),
   currentSong: null,
   setCurrentSong: (song) => set({ currentSong: song }),

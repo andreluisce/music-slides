@@ -217,6 +217,7 @@ export type Database = {
       presentations: {
         Row: {
           created_at: string
+          current_slide_id: string | null
           description: string | null
           id: string
           name: string
@@ -225,6 +226,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          current_slide_id?: string | null
           description?: string | null
           id?: string
           name: string
@@ -233,6 +235,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          current_slide_id?: string | null
           description?: string | null
           id?: string
           name?: string

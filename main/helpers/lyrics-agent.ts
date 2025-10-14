@@ -183,7 +183,7 @@ async function scrapeFromWeb(artist: string, title: string): Promise<LyricsSearc
             const lyricsResult = await src.provider.getLyrics(song.url);
             if (lyricsResult && lyricsResult.lyrics) {
               console.log(`✅ Lyrics fetched from ${src.name} for ${song.title} - ${song.artist}`);
-              return buildResult(src.name, lyricsResult.artist, lyricsResult.title, lyricsResult.lyrics, {
+              return buildResult(src.name, lyricsResult.artist ?? '', lyricsResult.title ?? '', lyricsResult.lyrics, {
                 url: song.url,
                 fetchedAt: new Date().toISOString(),
               });

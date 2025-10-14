@@ -118,6 +118,12 @@ dependencies:
     version: 5.0.8(@types/react@18.3.26)(react@18.3.1)
 
 devDependencies:
+  '@types/draft-js':
+    specifier: ^0.11.18
+    version: 0.11.18
+  '@types/fs-extra':
+    specifier: ^11.0.4
+    version: 11.0.4
   '@types/node':
     specifier: ^18.11.18
     version: 18.19.130
@@ -127,6 +133,9 @@ devDependencies:
   '@types/react-dom':
     specifier: ^19.2.2
     version: 19.2.2(@types/react@18.3.26)
+  '@types/string-similarity':
+    specifier: ^4.0.2
+    version: 4.0.2
   '@typescript-eslint/parser':
     specifier: ^5.56.0
     version: 5.62.0(eslint@8.57.1)(typescript@4.9.5)
@@ -1864,8 +1873,22 @@ packages:
       '@types/ms': 2.1.0
     dev: true
 
+  /@types/draft-js@0.11.18:
+    resolution: {integrity: sha512-lP6yJ+EKv5tcG1dflWgDKeezdwBa8wJ7KkiNrrHqXuXhl/VGes1SKjEfKHDZqOz19KQbrAhFvNhDPWwnQXYZGQ==}
+    dependencies:
+      '@types/react': 18.3.26
+      immutable: 3.7.6
+    dev: true
+
   /@types/estree@1.0.8:
     resolution: {integrity: sha512-dWHzHa2WqEXI/O1E9OjrocMTKJl2mSrEolh1Iomrv6U+JuNwaHXsXx9bLu5gG7BUWFIN0skIQJQ/L1rIex4X6w==}
+    dev: true
+
+  /@types/fs-extra@11.0.4:
+    resolution: {integrity: sha512-yTbItCNreRooED33qjunPthRcSjERP1r4MqCZc7wv0u2sUkzTFp45tgUfS5+r7FrZPdmCCNflLhVSP/o+SemsQ==}
+    dependencies:
+      '@types/jsonfile': 6.1.4
+      '@types/node': 18.19.130
     dev: true
 
   /@types/fs-extra@9.0.13:
@@ -1889,6 +1912,12 @@ packages:
 
   /@types/json-schema@7.0.15:
     resolution: {integrity: sha512-5+fP8P8MFNC+AyZCDxrB2pkZFPGzqQWUzpSeuuVLvm8VMcorNYavBqoFcxK8bQz4Qsbn4oUEEem4wDLfcysGHA==}
+    dev: true
+
+  /@types/jsonfile@6.1.4:
+    resolution: {integrity: sha512-D5qGUYwjvnNNextdU59/+fI+spnwtTFmyQP0h+PfIOSkNfpU6AOICUOkm4i0OnSk+NyjdPJrxCDro0sJsWlRpQ==}
+    dependencies:
+      '@types/node': 18.19.130
     dev: true
 
   /@types/keyv@3.1.4:
@@ -1962,6 +1991,10 @@ packages:
 
   /@types/semver@7.7.1:
     resolution: {integrity: sha512-FmgJfu+MOcQ370SD0ev7EI8TlCAfKYU+B4m5T3yXc1CiRN94g/SZPtsCkk506aUDtlMnFZvasDwHHUcZUEaYuA==}
+    dev: true
+
+  /@types/string-similarity@4.0.2:
+    resolution: {integrity: sha512-LkJQ/jsXtCVMK+sKYAmX/8zEq+/46f1PTQw7YtmQwb74jemS1SlNLmARM2Zml9DgdDTWKAtc5L13WorpHPDjDA==}
     dev: true
 
   /@types/use-sync-external-store@0.0.6:
@@ -4490,7 +4523,6 @@ packages:
   /immutable@3.7.6:
     resolution: {integrity: sha512-AizQPcaofEtO11RZhPPHBOJRdo/20MKQF9mBLnVkBoyHi1/zXK8fzVdnEpSV9gxqtnh6Qomfp3F0xT5qP/vThw==}
     engines: {node: '>=0.8.0'}
-    dev: false
 
   /import-fresh@3.3.1:
     resolution: {integrity: sha512-TR3KfrTZTYLPB6jUjfx6MF9WcWrHL9su5TObK4ZkYgBdWKPOFoSoQIdEuTuR82pmtxH2spWG9h6etwfr1pLBqQ==}

@@ -7,6 +7,7 @@ import { MusicNotesPlusIcon, XCircle, CheckCircle, X, CloudCheck, Globe } from '
 import SongModal from './SongModal';
 import PresentationControlPanel from './PresentationControlPanel';
 import { useStageMode } from '../hooks/useStageMode';
+import type { Song as SupabaseSong } from '../lib/supabase';
 
 interface SearchResult {
   title: string;
@@ -15,17 +16,12 @@ interface SearchResult {
   source: 'letrasmusic' | 'cifraclub' | 'database-cache';
 }
 
-interface Song {
-  title: string;
-  band?: string;
-  artist?: string;
-  url?: string;
+interface DisplaySong extends SupabaseSong {
+  band: string | null;
   filePath?: string;
-  supabaseId?: string;
-  lyrics?: string;
-  isLocal?: boolean;
-  source?: string;
-  metadata?: any;
+  isLocal: boolean;
+  syncStatus: string;
+  url?: string; // Add url to DisplaySong
 }
 
 const api = typeof window !== 'undefined' ? window.api : undefined;
@@ -62,7 +58,7 @@ function getSourceBadge(source: string) {
 
 interface SearchFormProps {
   isSearching: boolean;
-  setFoundRemoteSongs: (songs: Song[]) => void;
+  setFoundRemoteSongs: (songs: DisplaySong[]) => void;
   setIsSearching: (value: boolean) => void;
 }
 
@@ -165,12 +161,12 @@ function SearchForm({ isSearching, setFoundRemoteSongs, setIsSearching }: Search
     try {
       const fullResult = await api?.fetchLyricsByUrl(result.url, result.source);
       if (fullResult) {
-        const songEntry: Song = {
+        const songEntry: DisplaySong = {
           title: fullResult.title,
-          band: fullResult.artist,
+          artist: fullResult.artist,
           url: result.url,
           lyrics: fullResult.lyrics,
-          source: fullResult.source,
+          source: fullResult.source as 'letrasmusic' | 'cifraclub' | 'database-cache',
           metadata: fullResult.metadata,
         };
         setFoundRemoteSongs([songEntry]);
@@ -374,11 +370,12 @@ function SearchForm({ isSearching, setFoundRemoteSongs, setIsSearching }: Search
 }
 
 interface SongListTableProps {
-  filteredLocalSongs: Song[];
-  foundRemoteSongs: Song[];
+  filteredLocalSongs: DisplaySong[];
+  foundRemoteSongs: DisplaySong[];
+  onSongSelect: (song: DisplaySong) => void;
 }
 
-function SongListTable({ filteredLocalSongs, foundRemoteSongs }: SongListTableProps) {
+function SongListTable({ filteredLocalSongs, foundRemoteSongs, onSongSelect }: SongListTableProps) {
   const { setMode, setCurrentSong } = useStageMode();
   const [allSongs, setAllSongs] = useState<Song[]>([]);
   const [groupedSongs, setGroupedSongs] = useState<{ [key: string]: Song[] }>({});
@@ -465,10 +462,11 @@ function SongListTable({ filteredLocalSongs, foundRemoteSongs }: SongListTablePr
         // Save current song to store
         setCurrentSong({
           title: song.title,
-          artist: artist,
+          artist: artist || 'Unknown Artist', // Provide a default value for artist
           filePath: song.filePath,
           lyrics: song.lyrics,
         });
+        onSongSelect(song);
 
         // Navigate to Presentations → Live Control
         setMode('live');
@@ -649,8 +647,8 @@ function SongListTable({ filteredLocalSongs, foundRemoteSongs }: SongListTablePr
                           className='group relative w-full flex items-center gap-3 px-3 py-2 rounded-md hover:bg-white/10 transition-all'
                         >
                           {/* Status Indicator */}
-                          <div className={`flex-shrink-0 text-xs ${getSyncStatusColor(song.syncStatus)}`}>
-                            {getSyncStatusIcon(song.syncStatus)}
+                          <div className={`flex-shrink-0 text-xs ${getSyncStatusColor(song.syncStatus || '')}`}>
+                            {getSyncStatusIcon(song.syncStatus || '')}
                           </div>
 
                           {/* Song Title */}
@@ -704,7 +702,12 @@ function SongListTable({ filteredLocalSongs, foundRemoteSongs }: SongListTablePr
   );
 }
 
-export default function MusicLibrary() {
+interface MusicLibraryProps {
+  onSongSelect: (song: any) => void;
+  selectedSection: string;
+}
+
+export default function MusicLibrary({ onSongSelect, selectedSection }: MusicLibraryProps) {
   const [foundRemoteSongs, setFoundRemoteSongs] = useState<Song[]>([]);
   const [filteredLocalSongs, setFilteredLocalSongs] = useState<Song[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -761,7 +764,7 @@ export default function MusicLibrary() {
         }}
       />
       <div className="mt-6">
-        <SongListTable {...{ filteredLocalSongs, foundRemoteSongs }} />
+        <SongListTable {...{ filteredLocalSongs, foundRemoteSongs, onSongSelect }} />
       </div>
 
       <SongModal

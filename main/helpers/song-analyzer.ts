@@ -54,7 +54,7 @@ export async function getAnalyzedSlides(
     
     return analysis.slides;
   } catch (error) {
-    console.error('❌ Error in getAnalyzedSlides:', error.message);
+    console.error('❌ Error in getAnalyzedSlides:', (error as Error).message);
     console.log('🔄 Falling back to basic lyrics formatting...');
     
     try {
@@ -62,7 +62,7 @@ export async function getAnalyzedSlides(
       const { formatLyrics } = await import('./lyrics');
       return await formatLyrics(lyrics);
     } catch (fallbackError) {
-      console.error('❌ Even fallback failed:', fallbackError.message);
+      console.error('❌ Even fallback failed:', (fallbackError as Error).message);
       // Last resort: basic text splitting
       return lyrics.split('\n')
         .filter(line => line.trim())
@@ -146,7 +146,7 @@ export async function getAdvancedSongAnalysis(
       console.log('🔄 Old cache format found, regenerating with advanced metadata');
     }
   } catch (error) {
-    console.error('Error reading analysis cache:', error);
+    console.error('Error reading analysis cache:', error as Error);
   }
 
   // 3. Generate new advanced analysis (ONLY FIRST TIME)
@@ -187,13 +187,13 @@ export async function getAdvancedSongAnalysis(
         console.log('✅ Saved advanced analysis to Supabase:', `${artist} - ${title}`);
       }
     } catch (cacheError) {
-      console.error('Error saving advanced analysis cache:', cacheError);
+      console.error('Error saving advanced analysis cache:', cacheError as Error);
       // Don't fail if cache save fails, just return the analysis
     }
 
     return analysis;
   } catch (aiError) {
-    console.error('❌ Advanced metadata generation failed:', aiError.message);
+    console.error('❌ Advanced metadata generation failed:', (aiError as Error).message);
     console.log('🔄 Falling back to basic analysis generation...');
     
     // Fallback to basic analysis
@@ -273,7 +273,7 @@ export async function updateSongAnalysis(
       console.log('✅ Updated analysis in Supabase:', `${artist} - ${title}`);
     }
   } catch (error) {
-    console.error('Error updating analysis:', error);
+    console.error('Error updating analysis:', error as Error);
     throw error;
   }
 }

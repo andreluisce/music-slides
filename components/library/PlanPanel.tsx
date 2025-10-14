@@ -1,14 +1,6 @@
 import React from 'react';
 import { motion, Reorder } from 'framer-motion';
-import {
-  Play,
-  GripVertical,
-  ArrowUp,
-  ArrowDown,
-  X,
-  Plus,
-  Clock
-} from '@phosphor-icons/react';
+import { FlipVertical, Plus, DotsSixVertical, Clock, Play, X } from '@phosphor-icons/react';
 
 interface PlanItem {
   id: string;
@@ -91,7 +83,7 @@ export default function PlanPanel({
               >
                 {/* Drag Handle */}
                 <div className="cursor-move rounded p-1 text-slate-600 hover:bg-white/5 hover:text-slate-400">
-                  <GripVertical size={16} />
+                  <DotsSixVertical size={16} />
                 </div>
 
                 {/* Item Info */}

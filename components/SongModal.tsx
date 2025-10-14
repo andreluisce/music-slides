@@ -39,9 +39,8 @@ export default function SongModal({ isOpen, onClose, onSave, song }: SongModalPr
     if (song) {
       setTitle(song.title);
       setArtist(song.artist);
-      const lyricsString = Array.isArray(song.lyrics) ? song.lyrics.join('\n') : song.lyrics || '';
-      setLyricsText(lyricsString);
-      setLyricsLineCount(lyricsString.split('\n').filter(line => line.trim()).length || 1);
+      setLyricsText(song.lyrics || ''); // song.lyrics is string, provide default empty string
+      setLyricsLineCount(song.lyrics.split('\n').filter(line => line.trim()).length || 1);
     } else {
       setTitle('');
       setArtist('');
@@ -141,7 +140,7 @@ export default function SongModal({ isOpen, onClose, onSave, song }: SongModalPr
     setIsSaving(true);
     try {
       // Convert lyrics text to array of lines, filtering out empty lines
-      const lyricsArray = lyricsText.split('\n').filter((line) => line.trim() !== '');
+      const lyricsArray = lyricsText.split('\n').filter((line: string) => line.trim() !== '');
 
       if (song) {
         await updateSong(song.id, {

@@ -2,7 +2,10 @@
   "compilerOptions": {
     "target": "ESNext",
     "module": "ESNext",
-    "lib": ["DOM", "ESNext"],
+    "lib": [
+      "DOM",
+      "ESNext"
+    ],
     "jsx": "react-jsx",
     "moduleResolution": "Node",
     "esModuleInterop": true,
@@ -15,21 +18,29 @@
     "noEmit": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["*"],
-      "@main/*": ["main/*"],
-      "@shared/*": ["shared/*"]
-    }
+      "@/*": [
+        "*"
+      ],
+      "@main/*": [
+        "main/*"
+      ],
+      "@shared/*": [
+        "shared/*"
+      ]
+    },
+    "types": [
+      "node"
+    ]
   },
   "include": [
     ".",
     "main",
-    "shared",
-    "vite.config.ts"
+    "shared"
   ],
   "exclude": [
-    "node_modules",
     "dist",
     "dist-electron",
-    "dist_electron_builder"
+    "dist_electron_builder",
+    "vite.config.ts"
   ]
 }

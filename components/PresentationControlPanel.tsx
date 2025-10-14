@@ -18,6 +18,7 @@ import { FONTS } from '../lib/fonts-service';
 import { Input } from './ui/input';
 import { Slider } from './ui/slider';
 import { useSettings } from '../contexts/SettingsContext';
+import { THEME_PRESETS } from '../lib/themes-service';
 
 interface Slide {
   id: string;
@@ -158,7 +159,7 @@ export default function PresentationControlPanel({
     setCurrentSlideIndex(index);
     const slideId = slides[index]?.id; // Get the ID of the slide
     if (presentationId && slideId) {
-      await window.electron.updatePresentationCurrentSlide(presentationId, slideId);
+      await window.api?.updatePresentationCurrentSlide(presentationId, slideId);
     }
     window.api?.sendPresentationSlideChange(index);
   }, [presentationId, slides]);
@@ -337,8 +338,6 @@ export default function PresentationControlPanel({
                             key={font.name}
                             onClick={() => updateTheme({ 
                               fontFamily: font.family,
-                              titleFont: font.family,
-                              bodyFont: font.family
                             })}
                             className={`w-full p-3 rounded-lg transition-all flex items-center justify-between ${theme.fontFamily === font.family ? 'bg-magenta/20 border-magenta' : 'bg-slate-800 hover:bg-slate-700 border-slate-700'} border`}
                           >
