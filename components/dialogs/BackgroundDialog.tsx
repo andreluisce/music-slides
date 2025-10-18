@@ -30,12 +30,12 @@ export default function BackgroundDialog({ isOpen, onClose, onSelect }: Backgrou
     setLoading(true);
     try {
       if (activeTab === 'videos') {
-        const result = await window.api?.getBackgroundVideos();
+        const result = await window.api?.video?.getBackgroundVideos();
         if (result) {
           setVideos(result);
         }
       } else {
-        const result = await window.api?.getBackgroundImages();
+        const result = await window.api?.video?.getBackgroundImages();
         if (result) {
           setImages(result);
         }
