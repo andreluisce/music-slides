@@ -25,10 +25,22 @@ import * as fileSystem from './helpers/file-system';
 import { createApplicationMenu } from './helpers/menu';
 import { performFullSync } from './helpers/sync-service';
 import { LetrasMusProvider } from './helpers/lyrics-providers/letrasmusic.provider';
+import { FireCrawlLyricsProvider } from './helpers/lyrics-providers/firecrawl-lyrics-provider';
+import { MCPLyricsProvider } from './helpers/lyrics-providers/mcp-lyrics-provider';
+import { initializeMCP, cleanupMCP, mcpService } from './helpers/mcp-service';
+import { lyricsCacheService } from './helpers/lyrics-cache-service';
+import { lyricsAnalyticsService } from './helpers/lyrics-analytics-service';
+import { musicLibraryIntegration } from './helpers/music-library-integration';
+import { supabaseLyricsIntegration } from './helpers/supabase-lyrics-integration';
+import { progressNotificationService } from './helpers/progress-notification-service';
+import { crossDeviceSyncService } from './helpers/cross-device-sync-service';
+import { notificationCustomizationService } from './helpers/notification-customization-service';
 import * as fse from 'fs-extra';
 import * as presentationsService from '../lib/presentations-service';
 
 let letrasmusProviderInstance: LetrasMusProvider;
+let fireCrawlProviderInstance: FireCrawlLyricsProvider;
+let mcpLyricsProviderInstance: MCPLyricsProvider;
 
 // Search types enum - inline definition
 const SearchType = {
@@ -63,7 +75,17 @@ let mainWindow: BrowserWindow | null;
   // Create application menu
   createApplicationMenu();
 
+  // Migrate old songs structure (.txt -> .json with folders)
   await fileSystem.migrateOldSongsToNewStructure();
+
+  // Migrate all songs to add slides[] array
+  console.log('🔄 Starting slides migration...');
+  try {
+    const migrationResult = await fileSystem.migrateAllSongsToSlidesFormat();
+    console.log('✅ Slides migration completed:', migrationResult);
+  } catch (error) {
+    console.error('❌ Error during slides migration:', error);
+  }
 
   // Perform background sync on startup (non-blocking)
   console.log('🔄 Starting background sync on app startup...');
@@ -112,6 +134,14 @@ let mainWindow: BrowserWindow | null;
     switch (action) {
       case 'clear':
         helpers.sendToPresentationWindow('presentation:on-control-received', { action: 'clear' });
+        break;
+      case 'slide':
+        console.log('Slide change through control channel:', data);
+        helpers.sendToPresentationWindow('presentation:on-control-received', { action: 'slide', data });
+        break;
+      case 'restart':
+        console.log('Restart presentation through control channel:', data);
+        helpers.sendToPresentationWindow('presentation:on-control-received', { action: 'restart', data });
         break;
       case 'fullscreen':
         if (presWindow) {
@@ -349,6 +379,27 @@ let mainWindow: BrowserWindow | null;
   ipcMain.handle('settings:update-all', async (_event, settings) => {
     const { updateSettings } = await import('./helpers/settings-service');
     return updateSettings(settings);
+  });
+
+  // Themes Service Handlers
+  ipcMain.handle('themes:get-all', async () => {
+    const themesService = await import('../lib/themes-service');
+    return themesService.getThemes();
+  });
+
+  ipcMain.handle('themes:create', async (_event, themeData) => {
+    const themesService = await import('../lib/themes-service');
+    return themesService.createTheme(themeData);
+  });
+
+  ipcMain.handle('themes:update', async (_event, { id, themeData }) => {
+    const themesService = await import('../lib/themes-service');
+    return themesService.updateTheme(id, themeData);
+  });
+
+  ipcMain.handle('themes:delete', async (_event, id) => {
+    const themesService = await import('../lib/themes-service');
+    return themesService.deleteTheme(id);
   });
 
   // Legacy handlers (keep for backward compatibility)
@@ -605,27 +656,62 @@ let mainWindow: BrowserWindow | null;
         }
       }
 
-      // Load song lyrics
-      let lyricsData: string | undefined;
-      if (filePath) {
-        const songData = await fileSystem.readSong(artist, title);
-        if (songData?.lyrics) {
-          lyricsData = songData.lyrics;
+      // Load song data (lyrics + slides)
+      console.log('🎵 Loading song data for:', artist, '-', title);
+
+      let songData: any = null;
+      try {
+        console.log('🎵 Reading song from file system...');
+        songData = await fileSystem.readSong(artist, title);
+        console.log('🎵 Song data received:', {
+          hasLyrics: !!songData?.lyrics,
+          hasSlides: !!songData?.slides,
+          slidesCount: songData?.slides?.length || 0
+        });
+
+        if (!songData?.slides && !songData?.lyrics) {
+          console.log('⚠️  Song found but has no lyrics or slides');
         }
+      } catch (error) {
+        console.error('❌ Error reading song:', error);
       }
 
-      // Wait a bit for the window to be ready, then send the lyrics
+      // Wait a bit for the window to be ready, then send the song data
       presWindow.webContents.once('did-finish-load', () => {
-        if (lyricsData) {
-sendToPresentationWindow('presentation:on-loaded-lyrics', lyricsData);
-          sendToPresentationWindow('presentation:on-song-info', { artist: artist || '', title: title || '' });
+        console.log('🎵 Presentation window finished loading, sending song data');
+        if (songData) {
+          console.log('🎵 Sending slides array to presentation window...');
+          // Send slides array (novo formato) e lyrics (compatibilidade)
+          sendToPresentationWindow('presentation:on-loaded-lyrics', {
+            lyrics: songData.lyrics,
+            slides: songData.slides,
+            artist,
+            title
+          });
+          sendToPresentationWindow('presentation:on-song-info', {
+            artist: artist || '',
+            title: title || ''
+          });
+          console.log('✅ Song data sent successfully');
+        } else {
+          console.log('⚠️  No song data to send');
         }
       });
 
       // If already loaded, send immediately
-      if (presWindow.webContents.isLoadingMainFrame() === false && lyricsData) {
-        sendToPresentationWindow('loaded-lyrics', lyricsData);
-        sendToPresentationWindow('song-info', { artist, title });
+      const isLoading = presWindow.webContents.isLoadingMainFrame();
+      console.log('🎵 Window loading status:', isLoading ? 'loading' : 'already loaded');
+
+      if (!isLoading && songData) {
+        console.log('🎵 Presentation window already loaded, sending song data immediately');
+        sendToPresentationWindow('presentation:on-loaded-lyrics', {
+          lyrics: songData.lyrics,
+          slides: songData.slides,
+          artist,
+          title
+        });
+        sendToPresentationWindow('presentation:on-song-info', { artist, title });
+        console.log('✅ Song data sent immediately');
       }
 
       console.log('✅ Presentation window opened successfully');
@@ -654,7 +740,14 @@ sendToPresentationWindow('presentation:on-loaded-lyrics', lyricsData);
   ipcMain.on('presentation:send-theme-update', async (_event, themeData: any) => {
     console.log('Theme update through theme channel:', themeData);
     const helpers = await getPresentationHelpers();
-    helpers.sendToPresentationWindow('theme-update', themeData);
+    helpers.sendToPresentationWindow('presentation:on-theme-update', themeData);
+  });
+
+  // Handle sending custom background to presentation window
+  ipcMain.on('presentation:set-custom-background', async (_event, backgroundData: any) => {
+    console.log('Background update through custom channel:', backgroundData);
+    const helpers = await getPresentationHelpers();
+    helpers.sendToPresentationWindow('presentation:on-custom-background', backgroundData);
   });
 
   // Manipulador de tela cheia
@@ -722,4 +815,477 @@ process.on('unhandledRejection', async (reason: Error, promise) => {
   await fileSystem.logError(`Unhandled Rejection in Main Process: ${reason}`, reason);
   app.relaunch();
   app.exit(1);
+});
+
+// ============================================================================
+// MCP LYRICS HANDLERS
+// ============================================================================
+
+// Initialize MCP services
+ipcMain.handle('mcp-lyrics:initialize', async () => {
+  try {
+    console.log('[Main] Initializing MCP services...');
+    const success = await initializeMCP();
+    
+    if (success) {
+      // Initialize provider instances
+      fireCrawlProviderInstance = new FireCrawlLyricsProvider(true); // Enable Gemini AI
+      mcpLyricsProviderInstance = new MCPLyricsProvider();
+      
+      console.log('[Main] MCP services initialized successfully');
+      return { success: true, message: 'MCP services initialized' };
+    } else {
+      return { success: false, message: 'Failed to initialize MCP services' };
+    }
+  } catch (error) {
+    console.error('[Main] MCP initialization failed:', error);
+    return { success: false, message: error.message };
+  }
+});
+
+// Get MCP status
+ipcMain.handle('mcp-lyrics:status', async () => {
+  try {
+    const runningServers = mcpService.getRunningServers();
+    return {
+      initialized: runningServers.length > 0,
+      servers: runningServers,
+      providers: {
+        firecrawl: !!fireCrawlProviderInstance,
+        playwright: !!mcpLyricsProviderInstance
+      }
+    };
+  } catch (error) {
+    console.error('[Main] Error getting MCP status:', error);
+    return { initialized: false, servers: [], providers: {} };
+  }
+});
+
+// Search with FireCrawl MCP + AI
+ipcMain.handle('mcp-lyrics:search-firecrawl', async (event, { artist, title }) => {
+  try {
+    if (!fireCrawlProviderInstance) {
+      throw new Error('FireCrawl provider not initialized');
+    }
+    
+    console.log(`[Main] FireCrawl search: ${artist} - ${title}`);
+    const results = await fireCrawlProviderInstance.searchByTitleAndArtist({ artist, title });
+    return { success: true, results };
+  } catch (error) {
+    console.error('[Main] FireCrawl search failed:', error);
+    return { success: false, error: error.message, results: [] };
+  }
+});
+
+// Get lyrics with FireCrawl MCP + AI
+ipcMain.handle('mcp-lyrics:get-lyrics-firecrawl', async (event, url) => {
+  try {
+    if (!fireCrawlProviderInstance) {
+      throw new Error('FireCrawl provider not initialized');
+    }
+    
+    console.log(`[Main] FireCrawl get lyrics: ${url}`);
+    const result = await fireCrawlProviderInstance.getLyrics(url);
+    return { success: true, result };
+  } catch (error) {
+    console.error('[Main] FireCrawl get lyrics failed:', error);
+    return { success: false, error: error.message, result: null };
+  }
+});
+
+// Search with Playwright MCP
+ipcMain.handle('mcp-lyrics:search-playwright', async (event, { artist, title }) => {
+  try {
+    if (!mcpLyricsProviderInstance) {
+      throw new Error('MCP Lyrics provider not initialized');
+    }
+    
+    console.log(`[Main] Playwright MCP search: ${artist} - ${title}`);
+    const results = await mcpLyricsProviderInstance.searchByTitleAndArtist({ artist, title });
+    return { success: true, results };
+  } catch (error) {
+    console.error('[Main] Playwright MCP search failed:', error);
+    return { success: false, error: error.message, results: [] };
+  }
+});
+
+// Get lyrics with Playwright MCP
+ipcMain.handle('mcp-lyrics:get-lyrics-playwright', async (event, url) => {
+  try {
+    if (!mcpLyricsProviderInstance) {
+      throw new Error('MCP Lyrics provider not initialized');
+    }
+    
+    console.log(`[Main] Playwright MCP get lyrics: ${url}`);
+    const result = await mcpLyricsProviderInstance.getLyrics(url);
+    return { success: true, result };
+  } catch (error) {
+    console.error('[Main] Playwright MCP get lyrics failed:', error);
+    return { success: false, error: error.message, result: null };
+  }
+});
+
+// Cleanup MCP services
+ipcMain.handle('mcp-lyrics:cleanup', async () => {
+  try {
+    console.log('[Main] Cleaning up MCP services...');
+    await cleanupMCP();
+    fireCrawlProviderInstance = null;
+    mcpLyricsProviderInstance = null;
+    return { success: true, message: 'MCP services cleaned up' };
+  } catch (error) {
+    console.error('[Main] MCP cleanup failed:', error);
+    return { success: false, message: error.message };
+  }
+});
+
+// Auto-initialize MCP when app is ready
+app.whenReady().then(async () => {
+  // Give the app a moment to fully initialize
+  setTimeout(async () => {
+    try {
+      console.log('[Main] Auto-initializing MCP services...');
+      await initializeMCP();
+      
+      fireCrawlProviderInstance = new FireCrawlLyricsProvider(true); // Enable Gemini AI
+      mcpLyricsProviderInstance = new MCPLyricsProvider();
+      
+      // Set main window for progress notifications
+      const allWindows = BrowserWindow.getAllWindows();
+      if (allWindows.length > 0) {
+        progressNotificationService.setMainWindow(allWindows[0]);
+      }
+
+      // Initialize additional services
+      await notificationCustomizationService.initialize();
+      await crossDeviceSyncService.initialize();
+      
+      console.log('[Main] MCP services auto-initialized');
+    } catch (error) {
+      console.warn('[Main] MCP auto-initialization failed:', error);
+    }
+  }, 2000);
+});
+
+// ============================================================================
+// CACHE & ANALYTICS HANDLERS
+// ============================================================================
+
+// Get cache statistics
+ipcMain.handle('lyrics-cache:get-stats', async () => {
+  try {
+    const stats = lyricsCacheService.getStats();
+    return { success: true, stats };
+  } catch (error) {
+    console.error('[Main] Error getting cache stats:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Clear cache
+ipcMain.handle('lyrics-cache:clear', async () => {
+  try {
+    await lyricsCacheService.clearCache();
+    return { success: true, message: 'Cache cleared successfully' };
+  } catch (error) {
+    console.error('[Main] Error clearing cache:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Get analytics statistics
+ipcMain.handle('lyrics-analytics:get-stats', async () => {
+  try {
+    const stats = lyricsAnalyticsService.getStats();
+    const performance = lyricsAnalyticsService.getPerformanceMetrics();
+    const topSearched = lyricsAnalyticsService.getTopSearched();
+    
+    return {
+      success: true,
+      data: {
+        stats,
+        performance,
+        topSearched
+      }
+    };
+  } catch (error) {
+    console.error('[Main] Error getting analytics stats:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Export analytics data
+ipcMain.handle('lyrics-analytics:export', async () => {
+  try {
+    const data = await lyricsAnalyticsService.exportData();
+    return { success: true, data };
+  } catch (error) {
+    console.error('[Main] Error exporting analytics:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Clear analytics data
+ipcMain.handle('lyrics-analytics:clear', async () => {
+  try {
+    await lyricsAnalyticsService.clearData();
+    return { success: true, message: 'Analytics data cleared successfully' };
+  } catch (error) {
+    console.error('[Main] Error clearing analytics:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Get events in date range
+ipcMain.handle('lyrics-analytics:get-events', async (event, { startTime, endTime }) => {
+  try {
+    const events = lyricsAnalyticsService.getEventsInRange(startTime, endTime);
+    return { success: true, events };
+  } catch (error) {
+    console.error('[Main] Error getting analytics events:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// ============================================================================
+// MUSIC LIBRARY INTEGRATION HANDLERS
+// ============================================================================
+
+// Get lyrics for a specific song
+ipcMain.handle('music-library:get-lyrics', async (event, song) => {
+  try {
+    const result = await musicLibraryIntegration.getLyricsForSong(song);
+    return result;
+  } catch (error) {
+    console.error('[Main] Error getting lyrics for song:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+});
+
+// Batch process multiple songs
+ipcMain.handle('music-library:batch-get-lyrics', async (event, songs) => {
+  try {
+    const result = await musicLibraryIntegration.batchGetLyrics(songs);
+    return { success: true, ...result };
+  } catch (error) {
+    console.error('[Main] Error in batch lyrics processing:', error);
+    return {
+      success: false,
+      error: error.message,
+      processed: 0,
+      successful: 0,
+      failed: 0,
+      results: []
+    };
+  }
+});
+
+// Auto-fill lyrics for songs without lyrics
+ipcMain.handle('music-library:auto-fill-lyrics', async (event, songs) => {
+  try {
+    const result = await musicLibraryIntegration.autoFillLyrics(songs);
+    return { success: true, ...result };
+  } catch (error) {
+    console.error('[Main] Error in auto-fill lyrics:', error);
+    return {
+      success: false,
+      error: error.message,
+      processed: 0,
+      filled: 0,
+      skipped: 0,
+      failed: 0
+    };
+  }
+});
+
+// Search and replace lyrics for a song
+ipcMain.handle('music-library:search-and-replace-lyrics', async (event, song) => {
+  try {
+    const result = await musicLibraryIntegration.searchAndReplaceLyrics(song);
+    return result;
+  } catch (error) {
+    console.error('[Main] Error searching and replacing lyrics:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+});
+
+// Get comprehensive lyrics statistics
+ipcMain.handle('music-library:get-lyrics-stats', async () => {
+  try {
+    const stats = await musicLibraryIntegration.getLyricsStats();
+    return { success: true, stats };
+  } catch (error) {
+    console.error('[Main] Error getting music library stats:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Start/stop auto-processing queue
+ipcMain.handle('music-library:start-auto-processing', async () => {
+  try {
+    musicLibraryIntegration.startAutoProcessing();
+    return { success: true, message: 'Auto-processing started' };
+  } catch (error) {
+    console.error('[Main] Error starting auto-processing:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('music-library:stop-auto-processing', async () => {
+  try {
+    musicLibraryIntegration.stopAutoProcessing();
+    return { success: true, message: 'Auto-processing stopped' };
+  } catch (error) {
+    console.error('[Main] Error stopping auto-processing:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Add songs to processing queue
+ipcMain.handle('music-library:add-to-queue', async (event, songs) => {
+  try {
+    musicLibraryIntegration.addToQueue(songs);
+    return { success: true, message: `Added ${songs.length} songs to queue` };
+  } catch (error) {
+    console.error('[Main] Error adding songs to queue:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// ============================================================================
+// SUPABASE LYRICS INTEGRATION HANDLERS
+// ============================================================================
+
+// Get songs without lyrics from Supabase
+ipcMain.handle('supabase-lyrics:get-songs-without-lyrics', async (event, limit = 100) => {
+  try {
+    const songs = await supabaseLyricsIntegration.getSongsWithoutLyrics(limit);
+    return { success: true, songs };
+  } catch (error) {
+    console.error('[Main] Error getting songs without lyrics:', error);
+    return { success: false, error: error.message, songs: [] };
+  }
+});
+
+// Search songs in Supabase
+ipcMain.handle('supabase-lyrics:search-songs', async (event, { query, limit = 50 }) => {
+  try {
+    const songs = await supabaseLyricsIntegration.searchSongs(query, limit);
+    return { success: true, songs };
+  } catch (error) {
+    console.error('[Main] Error searching songs:', error);
+    return { success: false, error: error.message, songs: [] };
+  }
+});
+
+// Get song by ID from Supabase
+ipcMain.handle('supabase-lyrics:get-song', async (event, songId) => {
+  try {
+    const song = await supabaseLyricsIntegration.getSongById(songId);
+    return { success: true, song };
+  } catch (error) {
+    console.error('[Main] Error getting song:', error);
+    return { success: false, error: error.message, song: null };
+  }
+});
+
+// Update song lyrics in Supabase
+ipcMain.handle('supabase-lyrics:update-lyrics', async (event, { songId, lyrics, source, metadata }) => {
+  try {
+    const result = await supabaseLyricsIntegration.updateSongLyrics(songId, lyrics, source, metadata);
+    return result;
+  } catch (error) {
+    console.error('[Main] Error updating song lyrics:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Create new song with lyrics in Supabase
+ipcMain.handle('supabase-lyrics:create-song', async (event, { artist, title, lyrics, source, metadata }) => {
+  try {
+    const result = await supabaseLyricsIntegration.createSongWithLyrics(artist, title, lyrics, source, metadata);
+    return result;
+  } catch (error) {
+    console.error('[Main] Error creating song:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Delete song lyrics in Supabase
+ipcMain.handle('supabase-lyrics:delete-lyrics', async (event, songId) => {
+  try {
+    const result = await supabaseLyricsIntegration.deleteSongLyrics(songId);
+    return result;
+  } catch (error) {
+    console.error('[Main] Error deleting song lyrics:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Get library statistics from Supabase
+ipcMain.handle('supabase-lyrics:get-stats', async () => {
+  try {
+    const stats = await supabaseLyricsIntegration.getLibraryStats();
+    return { success: true, stats };
+  } catch (error) {
+    console.error('[Main] Error getting library stats:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// ============================================================================
+// PROGRESS NOTIFICATION HANDLERS
+// ============================================================================
+
+// Get all active progress
+ipcMain.handle('progress:get-all', () => {
+  return progressNotificationService.getActiveProgress();
+});
+
+// Get specific progress
+ipcMain.handle('progress:get', (event, progressId) => {
+  return progressNotificationService.getActiveProgress().find(p => p.id === progressId) || null;
+});
+
+// Cancel progress
+ipcMain.handle('progress:cancel', (event, progressId) => {
+  return progressNotificationService.cancelProgress(progressId);
+});
+
+// Clear completed progress
+ipcMain.handle('progress:clear-completed', () => {
+  progressNotificationService.clearCompleted();
+  return { success: true };
+});
+
+// Update notification options
+ipcMain.handle('progress:update-options', (event, options) => {
+  // Implementation depends on how you want to store user preferences
+  // For now, we'll just return success
+  return { success: true };
+});
+
+// Full-text search songs in Supabase
+ipcMain.handle('supabase-lyrics:fulltext-search', async (event, { query, limit = 20 }) => {
+  try {
+    const songs = await supabaseLyricsIntegration.fullTextSearchSongs(query, limit);
+    return { success: true, songs };
+  } catch (error) {
+    console.error('[Main] Error in fulltext search:', error);
+    return { success: false, error: error.message, songs: [] };
+  }
+});
+
+// Cleanup MCP when app is closing
+app.on('before-quit', async () => {
+  console.log('[Main] App closing, cleaning up all services...');
+  await cleanupMCP();
+  await crossDeviceSyncService.cleanup();
+  console.log('[Main] All services cleaned up');
 });
