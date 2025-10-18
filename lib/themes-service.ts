@@ -1,68 +1,43 @@
-export interface Theme {
-  name: string;
-  titleFont: string;
-  bodyFont: string;
-  fontSize: number;
-  textColor: string;
-  textShadow: string;
-  backgroundColor: string;
-  textAlign: 'left' | 'center' | 'right';
-  fontWeight: number;
-  transitionType: 'fade' | 'slide' | 'zoom';
-  animation: string;
-}
+import { supabase } from './supabase';
+import type { definitions } from './database.types';
 
-export const THEME_PRESETS: Theme[] = [
-  {
-    name: 'Padrão',
-    titleFont: 'DM Sans',
-    bodyFont: 'DM Sans',
-    fontSize: 80,
-    textColor: '#FFFFFF',
-    textShadow: '2px 2px 8px rgba(0,0,0,0.8)',
-    backgroundColor: '#000000',
-    textAlign: 'center',
-    fontWeight: 700,
-    transitionType: 'fade',
-    animation: 'fade'
-  },
-  {
-    name: 'Elegant Gold',
-    titleFont: 'Epilogue',
-    bodyFont: 'Epilogue',
-    fontSize: 64,
-    textColor: '#FFD700', // Gold color
-    textShadow: '2px 2px 8px rgba(0,0,0,0.8)',
-    backgroundColor: '#000000',
-    textAlign: 'center',
-    fontWeight: 600,
-    transitionType: 'slide',
-    animation: 'slide'
-  },
-  {
-    name: 'Bold Impact',
-    titleFont: 'Epilogue',
-    bodyFont: 'Epilogue',
-    fontSize: 67,
-    textColor: '#FF00FF', // Magenta
-    textShadow: '3px 3px 0px rgba(0,255,255,0.5)', // Cyan shadow for neon effect
-    backgroundColor: '#000000',
-    textAlign: 'center',
-    fontWeight: 800,
-    transitionType: 'zoom',
-    animation: 'zoom'
-  },
-  {
-    name: 'Neon Glow',
-    titleFont: 'DM Sans',
-    bodyFont: 'DM Sans',
-    fontSize: 72,
-    textColor: '#00FFFF', // Cyan
-    textShadow: '0 0 10px #00FFFF, 0 0 20px #00FFFF, 0 0 30px #00FFFF',
-    backgroundColor: '#000000',
-    textAlign: 'center',
-    fontWeight: 700,
-    transitionType: 'fade',
-    animation: 'fade'
+// The 'themes' table structure from the generated types
+export type Theme = definitions['themes']['Row'];
+export type ThemeInsert = definitions['themes']['Insert'];
+export type ThemeUpdate = definitions['themes']['Update'];
+
+export const getThemes = async (): Promise<Theme[]> => {
+  const { data, error } = await supabase.from('themes').select('*');
+  if (error) {
+    console.error('Error fetching themes:', error);
+    throw error;
   }
-];
+  return data;
+};
+
+export const createTheme = async (themeData: ThemeInsert): Promise<Theme> => {
+  const { data, error } = await supabase.from('themes').insert(themeData).select().single();
+  if (error || !data) {
+    console.error('Error creating theme:', error);
+    throw error || new Error('No data returned after insert');
+  }
+  return data;
+};
+
+export const updateTheme = async (id: string, themeData: ThemeUpdate): Promise<Theme> => {
+  const { data, error } = await supabase.from('themes').update(themeData).eq('id', id).select().single();
+  if (error || !data) {
+    console.error('Error updating theme:', error);
+    throw error || new Error('No data returned after update');
+  }
+  return data;
+};
+
+export const deleteTheme = async (id: string) => {
+  const { error } = await supabase.from('themes').delete().eq('id', id);
+  if (error) {
+    console.error('Error deleting theme:', error);
+    throw error;
+  }
+  return { success: true };
+};
