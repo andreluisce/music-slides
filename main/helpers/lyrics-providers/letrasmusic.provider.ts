@@ -275,6 +275,11 @@ export async function getLyrics(url: string): Promise<LyricsResult | null> {
     for (const selector of lyricsSelectors) {
       const $lyricsElement = $(selector);
       if ($lyricsElement.length > 0) {
+        // Convert <br> tags to newlines before extracting text
+        $lyricsElement.find('br').replaceWith('\n');
+        $lyricsElement.find('p').each(function() {
+          $(this).append('\n');
+        });
         lyrics = $lyricsElement.text().trim();
         console.log(`[LetrasMusic] Found lyrics using selector: ${selector}`);
         break;

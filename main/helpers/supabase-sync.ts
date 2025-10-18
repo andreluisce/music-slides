@@ -200,12 +200,15 @@ export async function saveSongToSupabaseTable(
     const songData = {
       artist,
       title,
-      source: metadata.source || 'unknown',
-      url: metadata.url || null,
-      lyrics_preview: lyricsPreview,
-      lyrics_length: lyrics.length,
-      storage_path: defaultStoragePath,
-      metadata,
+      lyrics,  // Add full lyrics to the table
+      provider: metadata.source || metadata.provider || 'unknown',  // Changed from 'source' to 'provider'
+      metadata: {
+        ...metadata,
+        url: metadata.url || null,  // Store URL in metadata JSON column
+        lyrics_preview: lyricsPreview,  // Store preview in metadata
+        lyrics_length: lyrics.length,  // Store length in metadata
+        storage_path: defaultStoragePath,  // Store storage path in metadata
+      },
       updated_at: new Date().toISOString(),
     };
 
@@ -317,7 +320,7 @@ export async function getCompleteSongData(
         return {
           lyrics: parsed.lyrics,
           metadata: parsed.metadata || {},
-          source: tableData.source,
+          source: tableData.provider || 'unknown',  // Changed from tableData.source to tableData.provider
         };
       }
     }
@@ -351,7 +354,7 @@ export async function listSongsPreview(limit = 50): Promise<any[]> {
 
     const { data, error } = await supabase
       .from(TABLE_NAME)
-      .select('artist, title, source, lyrics_preview, lyrics_length, created_at')
+      .select('artist, title, provider, metadata, created_at')
       .order('created_at', { ascending: false })
       .limit(limit);
 
@@ -393,7 +396,7 @@ export async function searchSongsByText(
     // Usa o padrão simples do Supabase JS
     const { data, error } = await supabase
       .from(TABLE_NAME)
-      .select('title, artist, source, lyrics_preview, lyrics_length, metadata, storage_path, created_at')
+      .select('title, artist, provider, metadata, created_at')
       .textSearch('search_vector', normalizedQuery, {
         type: 'plain', // ou 'websearch' para aceitar operadores tipo Google
         config: 'simple',
@@ -430,7 +433,7 @@ export async function searchSongsSimple(
 
     const { data, error } = await supabase
       .from(TABLE_NAME)
-      .select('artist, title, source, lyrics_preview, lyrics_length, created_at')
+      .select('artist, title, provider, metadata, created_at')
       .or(`artist.ilike.${searchTerm},title.ilike.${searchTerm}`)
       .order('created_at', { ascending: false })
       .limit(limit);

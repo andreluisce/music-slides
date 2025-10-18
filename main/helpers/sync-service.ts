@@ -30,6 +30,7 @@ export interface UnifiedSong {
   localUpdatedAt?: string;
   cloudUpdatedAt?: string;
   metadata?: SongMetadata;
+  slideCount?: number;
 }
 
 /**
@@ -42,10 +43,14 @@ export async function getUnifiedSongList(): Promise<UnifiedSong[]> {
   const getSongKey = (artist: string, title: string) =>
     `${artist.toLowerCase().trim()}|||${title.toLowerCase().trim()}`;
 
+  // 1. Load local songs
+  console.log('📁 Loading local songs...');
   try {
     const localGroups = await getAllSongsGroupedByArtist();
+    console.log(`📁 Found ${localGroups.length} local artist folders`);
 
     for (const group of localGroups) {
+      console.log(`   📁 ${group.artist}: ${group.songs.length} songs`);
       for (const song of group.songs) {
         const key = getSongKey(group.artist, song.title);
         const filePath = `${group.normalizedArtist}/${song.normalizedTitle}.json`;
@@ -53,10 +58,15 @@ export async function getUnifiedSongList(): Promise<UnifiedSong[]> {
         // Read song to get metadata
         let metadata: SongMetadata = {};
         let localUpdatedAt = '';
+        let slideCount = 0;
         try {
           const songData = await readSong(group.artist, song.title);
           metadata = songData.metadata || {};
           localUpdatedAt = metadata.updatedAt || metadata.createdAt || '';
+          // Get slide count from slides array if it exists
+          if (songData.slides && Array.isArray(songData.slides)) {
+            slideCount = songData.slides.length;
+          }
         } catch (e) {
           console.warn(`⚠️  Could not read metadata for ${group.artist} - ${song.title}`);
         }
@@ -68,6 +78,7 @@ export async function getUnifiedSongList(): Promise<UnifiedSong[]> {
           localPath: filePath,
           localUpdatedAt,
           metadata,
+          slideCount,
         });
       }
     }
@@ -97,9 +108,11 @@ export async function getUnifiedSongList(): Promise<UnifiedSong[]> {
       return Array.from(songMap.values());
     }
 
+    console.log(`☁️  Found ${cloudSongs?.length || 0} songs in Supabase database`);
 
     // 3. Merge with local songs
     for (const cloudSong of cloudSongs || []) {
+      console.log(`   ☁️  ${cloudSong.artist} - ${cloudSong.title}`);
       const key = getSongKey(cloudSong.artist, cloudSong.title);
       const existing = songMap.get(key);
 
@@ -154,6 +167,8 @@ export async function getUnifiedSongList(): Promise<UnifiedSong[]> {
     cloudOnly: unifiedList.filter(s => s.syncStatus === 'cloud-only').length,
     conflicts: unifiedList.filter(s => s.syncStatus === 'conflict').length,
   };
+
+  console.log('📊 Unified song list statistics:', stats);
 
   return unifiedList;
 }

@@ -3,6 +3,8 @@ import path from 'path';
 import sanitize from 'sanitize-filename';
 import { app } from 'electron';
 import type { Song, SongInsert } from '../../lib/supabase';
+import type { Slide } from '../../types/song';
+import { lyricsToSlides, slidesToLyrics } from '../../types/song';
 
 /**
  * Lista todas as músicas organizadas por artista
@@ -225,11 +227,12 @@ export async function songExists(artist: string, title: string): Promise<boolean
 /**
  * Cria o conteúdo do arquivo em formato JSON seguindo a estrutura do Supabase
  * Estrutura compatível com Database['public']['Tables']['songs']['Row']
+ * Suporta tanto slides[] quanto lyrics string (com auto-conversão)
  */
 export function createSongFileContent(
   artist: string,
   title: string,
-  lyrics: string,
+  lyricsOrSlides: string | Slide[],
   metadata?: {
     album?: string;
     year?: number;
@@ -244,11 +247,17 @@ export function createSongFileContent(
 ): string {
   const now = new Date().toISOString();
 
+  // Determina se recebeu slides ou lyrics
+  const isSlides = Array.isArray(lyricsOrSlides);
+  const slides: Slide[] = isSlides ? lyricsOrSlides : lyricsToSlides(lyricsOrSlides);
+  const lyrics: string = isSlides ? slidesToLyrics(lyricsOrSlides) : lyricsOrSlides;
+
   // Estrutura compatível com a tabela songs do Supabase
-  const songData: Partial<Song> = {
+  const songData: any = {
     title,
     artist,
-    lyrics, // No Supabase é string, localmente também
+    lyrics, // Mantém lyrics para compatibilidade
+    slides, // Novo campo: array de slides estruturados
     is_local: true,
     created_at: now,
     updated_at: now,
@@ -270,28 +279,41 @@ export function createSongFileContent(
 /**
  * Parse do conteúdo do arquivo JSON
  * Retorna um objeto compatível com Song do Supabase
+ * Suporta tanto formato novo (slides[]) quanto antigo (lyrics string)
  */
 export function parseSongFileContent(content: string): Partial<Song> {
   const songData = JSON.parse(content);
 
-  // Se já está no novo formato compatível com Supabase
-  if (songData.title && songData.artist && songData.lyrics !== undefined) {
-    return songData as Partial<Song>;
-  }
-
-  // Formato antigo (compatibilidade): converte para novo formato
+  // Extrai dados básicos
   const {
     lyrics,
+    slides,
     title,
     artist,
     metadata: oldMetadata,
     ...rest
   } = songData;
 
+  // Garante que temos tanto slides[] quanto lyrics string
+  let finalSlides: Slide[] | undefined;
+  let finalLyrics: string | undefined;
+
+  if (slides && Array.isArray(slides)) {
+    // Novo formato: tem slides
+    finalSlides = slides;
+    finalLyrics = lyrics || slidesToLyrics(slides);
+  } else if (lyrics && typeof lyrics === 'string') {
+    // Formato antigo: só tem lyrics
+    finalLyrics = lyrics;
+    finalSlides = lyricsToSlides(lyrics);
+  }
+
+  // Retorna objeto compatível com Supabase
   return {
     title: title || '',
     artist: artist || '',
-    lyrics: lyrics || '',
+    lyrics: finalLyrics || '',
+    slides: finalSlides || [],
     is_local: true,
     created_at: rest.createdAt || rest.created_at || new Date().toISOString(),
     updated_at: rest.updatedAt || rest.updated_at || new Date().toISOString(),
@@ -385,5 +407,94 @@ export async function saveSong(
   console.log(`✅ Song saved: ${filePath}`);
 
   return filePath;
+}
+
+/**
+ * Migra todos os arquivos de músicas existentes para adicionar slides[]
+ * Lê cada arquivo, verifica se já tem slides, e se não tiver, converte lyrics para slides
+ */
+export async function migrateAllSongsToSlidesFormat(): Promise<{
+  total: number;
+  migrated: number;
+  skipped: number;
+  errors: number;
+}> {
+  const basePath = getSongsBasePath();
+  await fse.ensureDir(basePath);
+
+  let total = 0;
+  let migrated = 0;
+  let skipped = 0;
+  let errors = 0;
+
+  try {
+    // Obter todos os artistas
+    const artistFolders = await fse.readdir(basePath);
+
+    for (const artistFolder of artistFolders) {
+      const artistPath = `${basePath}/${artistFolder}`;
+      const stats = await fse.stat(artistPath);
+
+      if (!stats.isDirectory()) {
+        continue;
+      }
+
+      // Obter todas as músicas deste artista
+      const songFiles = await fse.readdir(artistPath);
+
+      for (const songFile of songFiles) {
+        if (!songFile.endsWith('.json')) {
+          continue;
+        }
+
+        total++;
+        const filePath = `${artistPath}/${songFile}`;
+
+        try {
+          // Ler conteúdo do arquivo
+          const content = await fse.readFile(filePath, 'utf8');
+          const songData = JSON.parse(content);
+
+          // Verifica se já tem slides
+          if (songData.slides && Array.isArray(songData.slides) && songData.slides.length > 0) {
+            console.log(`⏭️ Already has slides: ${artistFolder}/${songFile}`);
+            skipped++;
+            continue;
+          }
+
+          // Precisa migrar: tem lyrics mas não tem slides
+          if (songData.lyrics && typeof songData.lyrics === 'string') {
+            console.log(`🔄 Migrating: ${artistFolder}/${songFile}`);
+
+            // Converte lyrics para slides
+            const slides = lyricsToSlides(songData.lyrics);
+
+            // Atualiza o objeto
+            songData.slides = slides;
+            songData.updated_at = new Date().toISOString();
+
+            // Salva de volta
+            await fse.writeFile(filePath, JSON.stringify(songData, null, 2), 'utf8');
+
+            migrated++;
+            console.log(`✅ Migrated: ${artistFolder}/${songFile} - ${slides.length} slides`);
+          } else {
+            console.log(`⚠️ No lyrics to migrate: ${artistFolder}/${songFile}`);
+            skipped++;
+          }
+        } catch (error) {
+          console.error(`❌ Error migrating ${artistFolder}/${songFile}:`, error);
+          errors++;
+        }
+      }
+    }
+  } catch (error) {
+    console.error('❌ Error during migration:', error);
+    errors++;
+  }
+
+  const result = { total, migrated, skipped, errors };
+  console.log('📊 Migration summary:', result);
+  return result;
 }
 

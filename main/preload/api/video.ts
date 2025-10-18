@@ -6,6 +6,10 @@ export const video = {
     debug('Sending', 'video:get-background-videos');
     return ipcRenderer.invoke('video:get-background-videos');
   },
+  getBackgroundImages: () => {
+    debug('Sending', 'get-background-images');
+    return ipcRenderer.invoke('get-background-images');
+  },
   getVideoBase64: (videoPath: string) => {
     debug('Sending', 'video:get-video-base64', { videoPath });
     return ipcRenderer.invoke('video:get-video-base64', { videoPath });
