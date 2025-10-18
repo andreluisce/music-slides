@@ -4,11 +4,12 @@ import { useStageMode } from './hooks/useStageMode';
 import { motion, AnimatePresence } from 'framer-motion';
 import DockTabs from './components/DockTabs';
 import LibraryPanel from './components/LibraryPanel';
-import PresentationsPanel from './components/PresentationsPanel';
+import PresentationsPanel from './components/music-library/panels/PresentationPanel';
 import OnboardingPanel from './components/OnboardingPanel';
 import SettingsPanel from './components/SettingsPanel';
 import HelpPanel from './components/HelpPanel';
 import TopBar from './components/TopBar';
+import { api } from './lib/electron-api';
 
 
 export default function App() {
@@ -18,35 +19,27 @@ export default function App() {
   useEffect(() => {
     const checkOnboarding = async () => {
       try {
-        // Check if we're in Electron environment
-        if (!(window as any).api?.getSetting) {
-          console.warn('Not running in Electron environment');
-
-          // In browser mode, check localStorage for testing
+        if (!(window as any).api?.isElectron()) {
+          console.warn('⚠️  Not running in Electron environment');
           const hasCompletedOnboarding = localStorage.getItem('onboardingCompleted') === 'true';
-
           if (!hasCompletedOnboarding) {
-            console.log('🎯 Showing onboarding in browser mode');
             setMode('onboarding');
           } else {
             setMode('library');
           }
-
           setIsChecking(false);
           return;
         }
 
-        const onboardingCompleted = await (window as any).api.getSetting('onboardingCompleted');
+        const onboardingCompleted = await (window.api as any).getSetting('onboardingCompleted');
 
         if (!onboardingCompleted) {
           setMode('onboarding');
         } else if (mode === 'onboarding') {
-          // If onboarding is complete but mode is still onboarding, switch to default
           setMode('library');
         }
       } catch (error) {
         console.error('Error checking onboarding status:', error);
-        // On error, show main app
         setMode('library');
       } finally {
         setIsChecking(false);
@@ -61,32 +54,24 @@ export default function App() {
   };
 
   const Panel = {
-    // Library sections
     library: () => <LibraryPanel />,
     songs: () => <LibraryPanel />,
     videos: () => <LibraryPanel />,
     images: () => <LibraryPanel />,
     bible: () => <LibraryPanel />,
     themes: () => <LibraryPanel />,
-
-    // Presentations sections
     presentations: () => <PresentationsPanel />,
     editor: () => <PresentationsPanel />,
     stage: () => <PresentationsPanel />,
     live: () => <PresentationsPanel />,
-
-    // System
     settings: SettingsPanel,
     help: () => <HelpPanel />,
     onboarding: () => <OnboardingPanel onComplete={handleOnboardingComplete} />,
-
-    // Legacy fallbacks
     palco: () => <PresentationsPanel />,
     editar: () => <PresentationsPanel />,
     mostrar: () => <LibraryPanel />,
   }[mode] || (() => <LibraryPanel />);
 
-  // Show loading state while checking onboarding
   if (isChecking) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-dark-bg text-white">
@@ -98,7 +83,6 @@ export default function App() {
     );
   }
 
-  // If in onboarding mode, show full-screen onboarding without TopBar and DockTabs
   if (mode === 'onboarding') {
     return (
       <div className="flex h-screen w-full flex-col bg-dark-bg text-white overflow-hidden">

@@ -3,6 +3,7 @@ import { Button } from './ui/button';
 import { Switch } from './ui/switch';
 import { Label } from './ui/label';
 import { Folder, CaretLeft, CaretRight, Check } from '@phosphor-icons/react';
+import { api } from '../lib/electron-api';
 
 interface OnboardingPanelProps {
   onComplete?: () => void;
@@ -21,9 +22,8 @@ export default function OnboardingPanel({ onComplete }: OnboardingPanelProps) {
     try {
       setIsSelectingPath(true);
 
-      // Check if in Electron environment
-      if ((window as any).api?.selectDataPath) {
-        const result = await (window as any).api.selectDataPath();
+      if (api.isElectron()) {
+        const result = await api.selectDataPath();
         if (result && !result.canceled && result.filePath) {
           setDataPath(result.filePath);
         }
@@ -55,12 +55,9 @@ export default function OnboardingPanel({ onComplete }: OnboardingPanelProps) {
 
   const handleFinish = async () => {
     try {
-      // Check if running in Electron
-      const isElectron = !!(window as any).api?.updateSettings;
-
-      if (isElectron) {
+      if (api.isElectron()) {
         // Save settings to Supabase via IPC
-        await (window as any).api.updateSettings({
+        await api.updateSettings({
           language,
           use24Hour,
           dataPath,
@@ -70,7 +67,7 @@ export default function OnboardingPanel({ onComplete }: OnboardingPanelProps) {
         });
 
         // Mark onboarding as complete
-        await (window as any).api.setSetting('onboardingCompleted', true);
+        await api.setSetting('onboardingCompleted', true);
 
         console.log('✅ Onboarding completed successfully in Electron');
       } else {

@@ -45,6 +45,7 @@ interface PresentationControlPanelProps {
     title: string;
     artist: string;
     lyrics?: string;
+    slides?: Slide[];
     filePath?: string;
   } | null;
   presentationId: string; // Add presentationId prop
@@ -83,48 +84,75 @@ export default function PresentationControlPanel({
     }
   }, [settings]);
 
-  // Parse lyrics into slides (one line = one slide)
+  // Load slides from song data (preferring slides[] over lyrics string)
   useEffect(() => {
     if (!song || !isOpen) return;
 
-    const loadLyrics = async () => {
+    const loadSlides = async () => {
       setLoading(true);
       try {
-        let lyricsText = '';
+        let slidesData: Slide[] = [];
 
-        if (song.lyrics) {
-          lyricsText = song.lyrics;
-        } else if (song.filePath) {
+        // Priorizar slides[] se disponível
+        if (song.slides && Array.isArray(song.slides)) {
+          console.log('Using slides array from song:', song.slides.length, 'slides');
+          slidesData = song.slides;
+        }
+        // Fallback: carregar do file system
+        else if (song.filePath || song.artist) {
           const result = await window.api?.readSong(song.artist, song.title);
-          if (result?.success && result.lyrics) {
-            lyricsText = result.lyrics;
+
+          if (result?.success) {
+            // Preferir slides[] do resultado
+            if (result.slides && Array.isArray(result.slides)) {
+              console.log('Using slides array from file system:', result.slides.length, 'slides');
+              slidesData = result.slides;
+            }
+            // Fallback: converter lyrics para slides
+            else if (result.lyrics) {
+              console.log('Converting lyrics to slides');
+              const lines = result.lyrics
+                .split('\n')
+                .map(line => line.trim())
+                .filter(line => line.length > 0);
+
+              slidesData = lines.map((line, index) => ({
+                id: `slide-${index}-${Date.now()}`,
+                content: line,
+                type: 'verse',
+                order: index
+              }));
+            }
           }
         }
-
-        if (lyricsText) {
-          // Split by lines - each line is a slide
-          const lines = lyricsText
+        // Fallback final: processar lyrics string se disponível
+        else if (song.lyrics) {
+          console.log('Converting lyrics string to slides');
+          const lines = song.lyrics
             .split('\n')
             .map(line => line.trim())
             .filter(line => line.length > 0);
 
-          const parsedSlides: Slide[] = lines.map((line, index) => ({
-            id: `slide-${index}`,
+          slidesData = lines.map((line, index) => ({
+            id: `slide-${index}-${Date.now()}`,
             content: line,
             type: 'verse',
+            order: index
           }));
+        }
 
-          setSlides(parsedSlides);
+        if (slidesData.length > 0) {
+          setSlides(slidesData);
           setCurrentSlideIndex(0);
         }
       } catch (error) {
-        console.error('Error loading lyrics:', error);
+        console.error('Error loading slides:', error);
       } finally {
         setLoading(false);
       }
     };
 
-    loadLyrics();
+    loadSlides();
   }, [song, isOpen]);
 
   // Keyboard navigation
@@ -180,16 +208,16 @@ export default function PresentationControlPanel({
     const newTheme = { ...theme, ...updates };
     setTheme(newTheme);
     console.log('Sending theme update:', newTheme);
-    window.api?.sendPresentationThemeUpdate(newTheme);
+    window.api?.presentation.updateTheme(newTheme);
   };
 
   const currentSlide = slides[currentSlideIndex];
 
   // Log para debug
-  console.log('PresentationControlPanel:', { isOpen, song, slides });
+
 
   if (!isOpen) return null;
-  
+
   // Mesmo sem música selecionada, mostramos o painel
   if (!song) {
     return (
@@ -240,32 +268,29 @@ export default function PresentationControlPanel({
             <div className='flex border-t border-slate-700'>
               <button
                 onClick={() => setActiveTab('slides')}
-                className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
-                  activeTab === 'slides'
-                    ? 'bg-slate-900 text-white border-b-2 border-magenta'
-                    : 'text-slate-400 hover:text-white'
-                }`}
+                className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${activeTab === 'slides'
+                  ? 'bg-slate-900 text-white border-b-2 border-magenta'
+                  : 'text-slate-400 hover:text-white'
+                  }`}
               >
                 Slides ({slides.length})
               </button>
               <button
                 onClick={() => setActiveTab('theme')}
-                className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
-                  activeTab === 'theme'
-                    ? 'bg-slate-900 text-white border-b-2 border-magenta'
-                    : 'text-slate-400 hover:text-white'
-                }`}
+                className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${activeTab === 'theme'
+                  ? 'bg-slate-900 text-white border-b-2 border-magenta'
+                  : 'text-slate-400 hover:text-white'
+                  }`}
               >
                 <Palette size={16} className='inline mr-2' />
                 Tema
               </button>
               <button
                 onClick={() => setActiveTab('background')}
-                className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
-                  activeTab === 'background'
-                    ? 'bg-slate-900 text-white border-b-2 border-magenta'
-                    : 'text-slate-400 hover:text-white'
-                }`}
+                className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${activeTab === 'background'
+                  ? 'bg-slate-900 text-white border-b-2 border-magenta'
+                  : 'text-slate-400 hover:text-white'
+                  }`}
               >
                 <ImageIcon size={16} className='inline mr-2' />
                 Background
@@ -288,11 +313,10 @@ export default function PresentationControlPanel({
                       <motion.button
                         key={slide.id}
                         onClick={() => goToSlide(index)}
-                        className={`w-full text-left p-4 rounded-lg transition-all ${
-                          index === currentSlideIndex
-                            ? 'bg-magenta text-white shadow-lg'
-                            : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-                        }`}
+                        className={`w-full text-left p-4 rounded-lg transition-all ${index === currentSlideIndex
+                          ? 'bg-magenta text-white shadow-lg'
+                          : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                          }`}
                         whileHover={{ scale: 1.02 }}
                         whileTap={{ scale: 0.98 }}
                       >
@@ -336,13 +360,13 @@ export default function PresentationControlPanel({
                         {FONTS.map((font) => (
                           <button
                             key={font.name}
-                            onClick={() => updateTheme({ 
+                            onClick={() => updateTheme({
                               fontFamily: font.family,
                             })}
                             className={`w-full p-3 rounded-lg transition-all flex items-center justify-between ${theme.fontFamily === font.family ? 'bg-magenta/20 border-magenta' : 'bg-slate-800 hover:bg-slate-700 border-slate-700'} border`}
                           >
                             <div className='flex items-center gap-3'>
-                              <span 
+                              <span
                                 className='text-lg text-white'
                                 style={{ fontFamily: font.family }}
                               >
@@ -412,11 +436,10 @@ export default function PresentationControlPanel({
                           <button
                             key={align}
                             onClick={() => updateTheme({ textAlign: align })}
-                            className={`flex-1 p-2 rounded-lg transition-colors ${
-                              theme.textAlign === align
-                                ? 'bg-magenta text-white'
-                                : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-                            }`}
+                            className={`flex-1 p-2 rounded-lg transition-colors ${theme.textAlign === align
+                              ? 'bg-magenta text-white'
+                              : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                              }`}
                           >
                             {align === 'left' && '← Esquerda'}
                             {align === 'center' && '↔ Centro'}
@@ -552,43 +575,43 @@ export default function PresentationControlPanel({
               >
                 {currentSlide.content}
               </p>
-                  </div>
-                )}
+            </div>
+          )}
 
-                {/* Theme Presets */}
-                <div className='mt-4 space-y-2'>
-                  <h4 className='text-xs font-medium text-slate-500 uppercase'>Temas</h4>
-                  {THEME_PRESETS.map((preset) => (
-                    <button
-                      key={preset.name}
-                      onClick={() => updateTheme(preset)}
-                      className='w-full p-4 rounded bg-slate-800 hover:bg-slate-700 text-left'
-                    >
-                      <div className='flex flex-col gap-1'>
-                        <span className='text-sm font-medium text-white'>{preset.name}</span>
-                        <div className='flex items-center gap-2 text-xs text-slate-400'>
-                          <span style={{ fontFamily: preset.titleFont }}>{preset.titleFont}</span>
-                          <span>•</span>
-                          <span>{preset.fontSize}px</span>
-                          <span>•</span>
-                          <span className='capitalize'>{preset.animation}</span>
-                        </div>
-                        <div 
-                          className='mt-2 aspect-video rounded-lg p-4 flex items-center justify-center'
-                          style={{
-                            backgroundColor: preset.backgroundColor,
-                            color: preset.textColor,
-                            textShadow: preset.textShadow,
-                            fontFamily: preset.titleFont,
-                            fontSize: `${preset.fontSize / 3}px`,
-                            fontWeight: preset.fontWeight,
-                          }}
-                        >
-                          Exemplo
-                        </div>
-                      </div>
-                    </button>
-                  ))}
+          {/* Theme Presets */}
+          <div className='mt-4 space-y-2'>
+            <h4 className='text-xs font-medium text-slate-500 uppercase'>Temas</h4>
+            {THEME_PRESETS.map((preset) => (
+              <button
+                key={preset.name}
+                onClick={() => updateTheme(preset)}
+                className='w-full p-4 rounded bg-slate-800 hover:bg-slate-700 text-left'
+              >
+                <div className='flex flex-col gap-1'>
+                  <span className='text-sm font-medium text-white'>{preset.name}</span>
+                  <div className='flex items-center gap-2 text-xs text-slate-400'>
+                    <span style={{ fontFamily: preset.titleFont }}>{preset.titleFont}</span>
+                    <span>•</span>
+                    <span>{preset.fontSize}px</span>
+                    <span>•</span>
+                    <span className='capitalize'>{preset.animation}</span>
+                  </div>
+                  <div
+                    className='mt-2 aspect-video rounded-lg p-4 flex items-center justify-center'
+                    style={{
+                      backgroundColor: preset.backgroundColor,
+                      color: preset.textColor,
+                      textShadow: preset.textShadow,
+                      fontFamily: preset.titleFont,
+                      fontSize: `${preset.fontSize / 3}px`,
+                      fontWeight: preset.fontWeight,
+                    }}
+                  >
+                    Exemplo
+                  </div>
+                </div>
+              </button>
+            ))}
           </div>
         </div>
       </div>

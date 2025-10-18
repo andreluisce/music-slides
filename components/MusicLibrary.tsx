@@ -7,7 +7,8 @@ import { MusicNotesPlusIcon, XCircle, CheckCircle, X, CloudCheck, Globe } from '
 import SongModal from './SongModal';
 import PresentationControlPanel from './PresentationControlPanel';
 import { useStageMode } from '../hooks/useStageMode';
-import type { Song as SupabaseSong } from '../lib/supabase';
+import type { Song, Song as SupabaseSong } from '../lib/supabase';
+import { api } from '../lib/electron-api';
 
 interface SearchResult {
   title: string;
@@ -23,8 +24,6 @@ interface DisplaySong extends SupabaseSong {
   syncStatus: string;
   url?: string; // Add url to DisplaySong
 }
-
-const api = typeof window !== 'undefined' ? window.api : undefined;
 
 // Helper function to get source badge info
 function getSourceBadge(source: string) {
@@ -106,12 +105,10 @@ function SearchForm({ isSearching, setFoundRemoteSongs, setIsSearching }: Search
   const [searchProgressMessage, setSearchProgressMessage] = useState('');
 
   useEffect(() => {
-    if (api) {
-      const cleanup = api.onSearchProgress((message) => {
-        setSearchProgressMessage(message);
-      });
-      return cleanup;
-    }
+    const cleanup = api.ai.onSearchProgress((message) => {
+      setSearchProgressMessage(message);
+    });
+    return cleanup;
   }, []);
   const submitForm = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -123,7 +120,7 @@ function SearchForm({ isSearching, setFoundRemoteSongs, setIsSearching }: Search
 
     try {
       // 1) Smart pre-check: see if it already exists locally or in cloud
-      const unifiedSongs = await api?.getUnifiedSongList();
+      const unifiedSongs = await api.songs.getUnifiedSongList();
       if (unifiedSongs && Array.isArray(unifiedSongs)) {
         const existing = findExistingSong(searchTerm, unifiedSongs);
         if (existing) {
@@ -136,7 +133,7 @@ function SearchForm({ isSearching, setFoundRemoteSongs, setIsSearching }: Search
 
       // 2) Not found: perform online search
       setIsSearching(true);
-      const results = await api?.fastLyricsSearch(searchTerm.trim());
+      const results = await api.ai.fastLyricsSearch(searchTerm.trim());
       setIsSearching(false);
 
       if (results && results.length > 0) {
@@ -159,7 +156,7 @@ function SearchForm({ isSearching, setFoundRemoteSongs, setIsSearching }: Search
     setSearchSuccess(false);
 
     try {
-      const fullResult = await api?.fetchLyricsByUrl(result.url, result.source);
+      const fullResult = await api.ai.fetchLyricsByUrl(result.url, result.source);
       if (fullResult) {
         const songEntry: DisplaySong = {
           title: fullResult.title,
@@ -266,11 +263,10 @@ function SearchForm({ isSearching, setFoundRemoteSongs, setIsSearching }: Search
       {/* Search Info/Error */}
       {searchError && !isSearching && !fetchingLyrics && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className='mt-3'>
-          <div className={`rounded-lg border p-4 ${
-            searchError.startsWith('💡') 
-              ? 'border-blue-500/30 bg-blue-500/10'
-              : 'border-red-500/30 bg-red-500/10'
-          }`}>
+          <div className={`rounded-lg border p-4 ${searchError.startsWith('💡')
+            ? 'border-blue-500/30 bg-blue-500/10'
+            : 'border-red-500/30 bg-red-500/10'
+            }`}>
             <div className='flex items-center gap-3'>
               {searchError.startsWith('💡') ? (
                 <div className='flex-shrink-0 text-blue-400'>
@@ -280,19 +276,17 @@ function SearchForm({ isSearching, setFoundRemoteSongs, setIsSearching }: Search
                 <XCircle size={20} weight='fill' className='flex-shrink-0 text-red-400' />
               )}
               <div className='flex-1'>
-                <p className={`text-sm font-semibold ${
-                  searchError.startsWith('💡') ? 'text-blue-300' : 'text-red-300'
-                }`}>
+                <p className={`text-sm font-semibold ${searchError.startsWith('💡') ? 'text-blue-300' : 'text-red-300'
+                  }`}>
                   {searchError}
                 </p>
               </div>
               <button
                 onClick={() => setSearchError('')}
-                className={`${
-                  searchError.startsWith('💡') 
-                    ? 'text-blue-400 hover:text-blue-300'
-                    : 'text-red-400 hover:text-red-300'
-                } transition-colors`}
+                className={`${searchError.startsWith('💡')
+                  ? 'text-blue-400 hover:text-blue-300'
+                  : 'text-red-400 hover:text-red-300'
+                  } transition-colors`}
               >
                 <X size={16} weight='bold' />
               </button>
@@ -449,12 +443,14 @@ function SongListTable({ filteredLocalSongs, foundRemoteSongs, onSongSelect }: S
 
   const handleSongClick = async (song: Song) => {
     console.log('🎵 Song clicked:', song.title, 'by', song.band || song.artist);
+    console.log('🎵 Song object:', JSON.stringify(song, null, 2));
+    console.log('🎵 filePath:', song.filePath);
 
     const artist = song.band || song.artist || 'Desconhecido';
 
     try {
       // Open presentation window on secondary display
-      const result = await api?.openPresentationWindow(artist, song.title, song.filePath);
+      const result = await api.openPresentationWindow(artist, song.title, song.filePath);
 
       if (result?.success) {
         console.log('✅ Presentation window opened successfully');
@@ -484,7 +480,7 @@ function SongListTable({ filteredLocalSongs, foundRemoteSongs, onSongSelect }: S
 
     // Also close presentation window
     try {
-      await api?.closePresentationWindow();
+      await api.closePresentationWindow();
     } catch (error) {
       console.error('Error closing presentation window:', error);
     }
@@ -532,171 +528,171 @@ function SongListTable({ filteredLocalSongs, foundRemoteSongs, onSongSelect }: S
 
       <div className='space-y-4'>
         {allSongs.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className='rounded-xl border border-white/10 bg-white/5 p-6 backdrop-blur-sm'>
-          {/* Header with Quick Search */}
-          <div className='mb-6 space-y-4'>
-            <div className='flex items-center justify-between'>
-              <h2 className='text-xl font-bold text-white'>Biblioteca de Músicas</h2>
-              <div className='flex items-center gap-4 text-xs text-slate-400'>
-                <div className='flex items-center gap-1.5'>
-                  <span className='text-green-400'>●</span> Sincronizada
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className='rounded-xl border border-white/10 bg-white/5 p-6 backdrop-blur-sm'>
+            {/* Header with Quick Search */}
+            <div className='mb-6 space-y-4'>
+              <div className='flex items-center justify-between'>
+                <h2 className='text-xl font-bold text-white'>Biblioteca de Músicas</h2>
+                <div className='flex items-center gap-4 text-xs text-slate-400'>
+                  <div className='flex items-center gap-1.5'>
+                    <span className='text-green-400'>●</span> Sincronizada
+                  </div>
+                  <div className='flex items-center gap-1.5'>
+                    <span className='text-blue-400'>○</span> Local
+                  </div>
+                  <div className='flex items-center gap-1.5'>
+                    <span className='text-purple-400'>◐</span> Nuvem
+                  </div>
                 </div>
-                <div className='flex items-center gap-1.5'>
-                  <span className='text-blue-400'>○</span> Local
-                </div>
-                <div className='flex items-center gap-1.5'>
-                  <span className='text-purple-400'>◐</span> Nuvem
-                </div>
+              </div>
+
+              {/* Quick Search Input */}
+              <div className='flex items-center gap-2'>
+                <Input
+                  type='text'
+                  value={quickSearch}
+                  onChange={(e) => setQuickSearch(e.target.value)}
+                  placeholder='Busca rápida por artista ou música...'
+                  className='h-9 border-white/20 bg-white/10 text-sm text-white placeholder:text-slate-400 focus:border-magenta/50 focus:ring-2 focus:ring-magenta/20'
+                />
+                {quickSearch && (
+                  <button
+                    onClick={() => setQuickSearch('')}
+                    className='flex-shrink-0 text-slate-400 hover:text-white transition-colors'
+                  >
+                    <X size={16} weight='bold' />
+                  </button>
+                )}
+              </div>
+
+              {/* Stats Bar */}
+              <div className='flex items-center gap-4 text-xs text-slate-500'>
+                <span>{totalArtists} {totalArtists === 1 ? 'artista' : 'artistas'}</span>
+                <span>•</span>
+                <span>{totalSongs} {totalSongs === 1 ? 'música' : 'músicas'}</span>
+                {quickSearch && (
+                  <>
+                    <span>•</span>
+                    <span className='text-magenta font-medium'>Filtrando resultados</span>
+                  </>
+                )}
               </div>
             </div>
 
-            {/* Quick Search Input */}
-            <div className='flex items-center gap-2'>
-              <Input
-                type='text'
-                value={quickSearch}
-                onChange={(e) => setQuickSearch(e.target.value)}
-                placeholder='Busca rápida por artista ou música...'
-                className='h-9 border-white/20 bg-white/10 text-sm text-white placeholder:text-slate-400 focus:border-magenta/50 focus:ring-2 focus:ring-magenta/20'
-              />
-              {quickSearch && (
+            {/* Artist Folders */}
+            <div className='space-y-2'>
+              {Object.entries(filteredGroupedSongs).map(([artist, songs]) => {
+                const isExpanded = expandedArtists.has(artist);
+
+                return (
+                  <motion.div
+                    key={artist}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className='rounded-lg border border-white/5 bg-white/5 overflow-hidden'
+                  >
+                    {/* Artist Header (Folder) */}
+                    <button
+                      onClick={() => toggleArtist(artist)}
+                      className='group w-full flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-all'
+                    >
+                      {/* Expand/Collapse Icon */}
+                      <motion.div
+                        animate={{ rotate: isExpanded ? 90 : 0 }}
+                        transition={{ duration: 0.2 }}
+                        className='flex-shrink-0 text-slate-400 group-hover:text-white'
+                      >
+                        ▶
+                      </motion.div>
+
+                      {/* Artist Name */}
+                      <div className='flex-1 min-w-0 text-left'>
+                        <h3 className='text-sm font-semibold text-white truncate group-hover:text-magenta transition-colors'>
+                          {artist}
+                        </h3>
+                      </div>
+
+                      {/* Song Count Badge */}
+                      <div className='flex-shrink-0 px-2 py-1 rounded-md bg-white/10 border border-white/10 text-xs font-medium text-slate-300'>
+                        {songs.length} {songs.length === 1 ? 'música' : 'músicas'}
+                      </div>
+                    </button>
+
+                    {/* Songs List (Collapsible) */}
+                    <motion.div
+                      initial={false}
+                      animate={{
+                        height: isExpanded ? 'auto' : 0,
+                        opacity: isExpanded ? 1 : 0,
+                      }}
+                      transition={{ duration: 0.2 }}
+                      className='overflow-hidden'
+                    >
+                      <div className='px-4 py-2 space-y-1 border-t border-white/5'>
+                        {songs.map((song, index) => (
+                          <motion.button
+                            key={song.supabaseId || song.url || song.filePath}
+                            initial={{ opacity: 0, x: -10 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ duration: 0.15, delay: index * 0.02 }}
+                            onClick={() => handleSongClick(song)}
+                            className='group relative w-full flex items-center gap-3 px-3 py-2 rounded-md hover:bg-white/10 transition-all'
+                          >
+                            {/* Status Indicator */}
+                            <div className={`flex-shrink-0 text-xs ${getSyncStatusColor(song.syncStatus || '')}`}>
+                              {getSyncStatusIcon(song.syncStatus || '')}
+                            </div>
+
+                            {/* Song Title */}
+                            <div className='flex-1 min-w-0 text-left'>
+                              <h4 className='text-sm font-medium text-white truncate group-hover:text-magenta transition-colors'>
+                                {song.title}
+                              </h4>
+                            </div>
+
+                            {/* Hover Actions */}
+                            <div className='flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity'>
+                              <span className='text-[10px] font-medium text-slate-500 uppercase tracking-wider'>
+                                Ver letra
+                              </span>
+                            </div>
+                          </motion.button>
+                        ))}
+                      </div>
+                    </motion.div>
+                  </motion.div>
+                );
+              })}
+            </div>
+
+            {/* Empty State */}
+            {totalSongs === 0 && quickSearch && (
+              <div className='text-center py-12'>
+                <p className='text-sm text-slate-400'>
+                  Nenhuma música ou artista encontrado para "{quickSearch}"
+                </p>
                 <button
                   onClick={() => setQuickSearch('')}
-                  className='flex-shrink-0 text-slate-400 hover:text-white transition-colors'
+                  className='mt-2 text-xs text-magenta hover:text-magenta-400 transition-colors'
                 >
-                  <X size={16} weight='bold' />
+                  Limpar busca
                 </button>
-              )}
-            </div>
+              </div>
+            )}
+          </motion.div>
+        )}
 
-            {/* Stats Bar */}
-            <div className='flex items-center gap-4 text-xs text-slate-500'>
-              <span>{totalArtists} {totalArtists === 1 ? 'artista' : 'artistas'}</span>
-              <span>•</span>
-              <span>{totalSongs} {totalSongs === 1 ? 'música' : 'músicas'}</span>
-              {quickSearch && (
-                <>
-                  <span>•</span>
-                  <span className='text-magenta font-medium'>Filtrando resultados</span>
-                </>
-              )}
-            </div>
+        {/* Library Empty State */}
+        {allSongs.length === 0 && (
+          <div className='text-center py-12 text-slate-400'>
+            <p className='text-sm'>Sua biblioteca está vazia</p>
+            <p className='text-xs mt-1'>Use a busca acima para adicionar músicas</p>
           </div>
-
-          {/* Artist Folders */}
-          <div className='space-y-2'>
-            {Object.entries(filteredGroupedSongs).map(([artist, songs]) => {
-              const isExpanded = expandedArtists.has(artist);
-
-              return (
-                <motion.div
-                  key={artist}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className='rounded-lg border border-white/5 bg-white/5 overflow-hidden'
-                >
-                  {/* Artist Header (Folder) */}
-                  <button
-                    onClick={() => toggleArtist(artist)}
-                    className='group w-full flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-all'
-                  >
-                    {/* Expand/Collapse Icon */}
-                    <motion.div
-                      animate={{ rotate: isExpanded ? 90 : 0 }}
-                      transition={{ duration: 0.2 }}
-                      className='flex-shrink-0 text-slate-400 group-hover:text-white'
-                    >
-                      ▶
-                    </motion.div>
-
-                    {/* Artist Name */}
-                    <div className='flex-1 min-w-0 text-left'>
-                      <h3 className='text-sm font-semibold text-white truncate group-hover:text-magenta transition-colors'>
-                        {artist}
-                      </h3>
-                    </div>
-
-                    {/* Song Count Badge */}
-                    <div className='flex-shrink-0 px-2 py-1 rounded-md bg-white/10 border border-white/10 text-xs font-medium text-slate-300'>
-                      {songs.length} {songs.length === 1 ? 'música' : 'músicas'}
-                    </div>
-                  </button>
-
-                  {/* Songs List (Collapsible) */}
-                  <motion.div
-                    initial={false}
-                    animate={{
-                      height: isExpanded ? 'auto' : 0,
-                      opacity: isExpanded ? 1 : 0,
-                    }}
-                    transition={{ duration: 0.2 }}
-                    className='overflow-hidden'
-                  >
-                    <div className='px-4 py-2 space-y-1 border-t border-white/5'>
-                      {songs.map((song, index) => (
-                        <motion.button
-                          key={song.supabaseId || song.url || song.filePath}
-                          initial={{ opacity: 0, x: -10 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ duration: 0.15, delay: index * 0.02 }}
-                          onClick={() => handleSongClick(song)}
-                          className='group relative w-full flex items-center gap-3 px-3 py-2 rounded-md hover:bg-white/10 transition-all'
-                        >
-                          {/* Status Indicator */}
-                          <div className={`flex-shrink-0 text-xs ${getSyncStatusColor(song.syncStatus || '')}`}>
-                            {getSyncStatusIcon(song.syncStatus || '')}
-                          </div>
-
-                          {/* Song Title */}
-                          <div className='flex-1 min-w-0 text-left'>
-                            <h4 className='text-sm font-medium text-white truncate group-hover:text-magenta transition-colors'>
-                              {song.title}
-                            </h4>
-                          </div>
-
-                          {/* Hover Actions */}
-                          <div className='flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity'>
-                            <span className='text-[10px] font-medium text-slate-500 uppercase tracking-wider'>
-                              Ver letra
-                            </span>
-                          </div>
-                        </motion.button>
-                      ))}
-                    </div>
-                  </motion.div>
-                </motion.div>
-              );
-            })}
-          </div>
-
-          {/* Empty State */}
-          {totalSongs === 0 && quickSearch && (
-            <div className='text-center py-12'>
-              <p className='text-sm text-slate-400'>
-                Nenhuma música ou artista encontrado para "{quickSearch}"
-              </p>
-              <button
-                onClick={() => setQuickSearch('')}
-                className='mt-2 text-xs text-magenta hover:text-magenta-400 transition-colors'
-              >
-                Limpar busca
-              </button>
-            </div>
-          )}
-        </motion.div>
-      )}
-
-      {/* Library Empty State */}
-      {allSongs.length === 0 && (
-        <div className='text-center py-12 text-slate-400'>
-          <p className='text-sm'>Sua biblioteca está vazia</p>
-          <p className='text-xs mt-1'>Use a busca acima para adicionar músicas</p>
-        </div>
-      )}
+        )}
       </div>
     </>
   );
@@ -713,8 +709,8 @@ export default function MusicLibrary({ onSongSelect, selectedSection }: MusicLib
   const [isSearching, setIsSearching] = useState(false);
   const [showNewSongDialog, setShowNewSongDialog] = useState(false);
 
-  const getAllSongs = () => 
-    api?.getUnifiedSongList().then((unifiedSongs: any) => {
+  const getAllSongs = () =>
+    api.songs.getUnifiedSongList().then((unifiedSongs: any) => {
       setFoundRemoteSongs([]);
 
       // Guard against undefined or empty songs list
@@ -723,7 +719,7 @@ export default function MusicLibrary({ onSongSelect, selectedSection }: MusicLib
         return;
       }
 
-      const allSongs: Song[] = unifiedSongs.map((song: any) => ({
+      const allSongs: Song[] = unifiedSongs.map((song) => ({
         title: song.title,
         band: song.artist,
         filePath: song.localPath,
