@@ -9,8 +9,11 @@ import { ai } from './preload/api/ai';
 import { settings } from './preload/api/settings';
 import { dialogs } from './preload/api/dialogs';
 import { sync } from './preload/api/sync';
+import { themes } from './preload/api/themes';
 import { error } from './preload/api/error';
 import { onIpc } from './preload/api/utils';
+import { mcpLyricsApi } from './preload/api/mcp-lyrics';
+import { lyricsIntegrationApi } from './preload/api/lyrics-integration';
 
 contextBridge.exposeInMainWorld('api', {
   presentation,
@@ -23,8 +26,15 @@ contextBridge.exposeInMainWorld('api', {
   settings,
   dialogs,
   sync,
+  themes,
   error,
   onIpc: <T>(channel: string, callback: (data: T) => void) => {
     return onIpc<T>(channel, callback);
   },
 });
+
+// Expose MCP Lyrics API separately
+contextBridge.exposeInMainWorld('mcpLyrics', mcpLyricsApi);
+
+// Expose Lyrics Integration API
+contextBridge.exposeInMainWorld('lyricsIntegration', lyricsIntegrationApi);
