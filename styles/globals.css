@@ -34,6 +34,29 @@
     --radius: 0.5rem;
   }
 
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 212.7 26.8% 83.9%;
+    --radius: 0.5rem;
+  }
+
   * {
     @apply border-border;
   }
@@ -247,5 +270,56 @@
     -webkit-line-clamp: 3;
     -webkit-box-orient: vertical;
     overflow: hidden;
+  }
+}
+
+@layer utilities {
+  /* Kinetic Background Animations */
+  .animate-gradient-nebula {
+    background: linear-gradient(
+      -45deg,
+      #0d0c11,
+      #1f102b,
+      #1a1a2e,
+      #111827
+    );
+    background-size: 400% 400%;
+    animation: gradient-move 25s ease infinite;
+  }
+
+  .animate-gradient-vibrant {
+    background: linear-gradient(
+      -45deg,
+      #ff0066,
+      #9333ea,
+      #3b82f6,
+      #ff0066
+    );
+    background-size: 400% 400%;
+    animation: gradient-move 15s ease infinite;
+  }
+
+  .animate-gradient-electric {
+    background: linear-gradient(
+      -45deg,
+      #000000,
+      #1a1a1a,
+      #333333,
+      #1a1a1a
+    );
+    background-size: 200% 200%;
+    animation: gradient-move 10s ease infinite;
+  }
+
+  @keyframes gradient-move {
+    0% {
+      background-position: 0% 50%;
+    }
+    50% {
+      background-position: 100% 50%;
+    }
+    100% {
+      background-position: 0% 50%;
+    }
   }
 }

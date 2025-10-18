@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { api } from '../lib/electron-api';
 
 export interface AppSettings {
   language: string;
@@ -14,6 +15,8 @@ export interface AppSettings {
   // Animation settings
   transitionType: 'fade' | 'slide' | 'zoom';
   transitionSpeed: number; // 0-100
+  // Theme settings
+  darkMode: boolean;
 }
 
 interface SettingsContextType {
@@ -39,6 +42,8 @@ const defaultSettings: AppSettings = {
   // Animation defaults
   transitionType: 'fade',
   transitionSpeed: 33,
+  // Theme defaults
+  darkMode: false,
 };
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
@@ -50,14 +55,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const loadSettings = async () => {
       try {
-        // Check if running in Electron environment
-        if (!(window as any).api) {
-          console.warn('Not running in Electron environment, using default settings');
-          return;
-        }
-
-        // Use window.api for settings-specific calls
-        const loadedSettings = await (window as any).api.getSettings();
+        const loadedSettings = await api.settings.getAll();
         setSettings(loadedSettings);
       } catch (error) {
         console.error('Error loading settings:', error);
@@ -67,14 +65,23 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     loadSettings();
   }, []);
 
+  // Apply dark mode class to HTML element
+  useEffect(() => {
+    if (settings.darkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [settings.darkMode]);
+
   const updateSetting = async <K extends keyof AppSettings>(
     key: K,
     value: AppSettings[K]
   ) => {
     try {
-      await (window as any).api.updateSetting(key, value);
+      await api.settings.update(key as string, value);
       setSettings(prev => ({ ...prev, [key]: value }));
-      console.log(`✅ Setting '${key}' updated in Supabase`);
+      console.log(`✅ Setting '${key}' updated`);
     } catch (error) {
       console.error(`Error updating setting ${key}:`, error);
       throw error;
@@ -83,7 +90,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
 
   const selectDataPath = async () => {
     try {
-      const result = await (window as any).api.selectDataPath();
+      const result = await api.settings.selectDataPath();
       if (result && !result.canceled) {
         await updateSetting('dataPath', result.filePath);
       }
@@ -95,7 +102,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
 
   const selectLyricsPath = async () => {
     try {
-      const result = await (window as any).api.selectLyricsPath();
+      const result = await api.settings.selectLyricsPath();
       if (result && !result.canceled) {
         await updateSetting('lyricsPath', result.filePath);
       }
@@ -107,7 +114,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
 
   const selectImagesPath = async () => {
     try {
-      const result = await (window as any).api.selectImagesPath();
+      const result = await api.settings.selectImagesPath();
       if (result && !result.canceled) {
         await updateSetting('imagesPath', result.filePath);
       }
@@ -119,7 +126,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
 
   const selectVideosPath = async () => {
     try {
-      const result = await (window as any).api.selectVideosPath();
+      const result = await api.settings.selectVideosPath();
       if (result && !result.canceled) {
         await updateSetting('videosPath', result.filePath);
       }
